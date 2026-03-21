@@ -1,0 +1,295 @@
+import Foundation
+import WebRTC
+import Combine
+import os
+
+private let log = Logger(subsystem: "com.glassview.app", category: "WebRTC")
+
+/// Manages a single WebRTC peer connection to a go2rtc stream.
+/// Each stream gets its own WebRTCClient instance, allowing multiple
+/// simultaneous video+audio feeds (bypassing iOS single-video limitation).
+///
+/// Includes automatic retry with exponential backoff on failure/disconnect.
+@MainActor
+final class WebRTCClient: NSObject, ObservableObject {
+    private var peerConnection: RTCPeerConnection?
+    private let factory: RTCPeerConnectionFactory
+    private let service: Go2RTCService
+    let streamName: String
+
+    @Published var videoTrack: RTCVideoTrack?
+    @Published var connectionState: RTCIceConnectionState = .new
+    @Published var error: String?
+    @Published var isRetrying = false
+    @Published private(set) var retryCount = 0
+
+    private var retryTask: Task<Void, Never>?
+    private var isManuallyDisconnected = false
+
+    private static let maxRetryDelay: TimeInterval = 30
+    private static let baseRetryDelay: TimeInterval = 1
+
+    init(service: Go2RTCService, streamName: String) {
+        self.factory = WebRTCFactory.shared.factory
+        self.service = service
+        self.streamName = streamName
+        super.init()
+    }
+
+    /// Trigger lazy factory initialization early (call from background thread)
+    nonisolated static func warmUp() {
+        WebRTCFactory.shared.ensureReady()
+    }
+
+    func connect() async {
+        log.info("[\(self.streamName)] connect() called")
+        isManuallyDisconnected = false
+        retryTask?.cancel()
+        retryTask = nil
+        retryCount = 0
+        isRetrying = false
+        error = nil
+
+        await attemptConnection()
+    }
+
+    private func attemptConnection() async {
+        log.info("[\(self.streamName)] attemptConnection (retry #\(self.retryCount))")
+        tearDownPeerConnection()
+
+        connectionState = .new
+
+        let config = RTCConfiguration()
+        config.sdpSemantics = .unifiedPlan
+        config.iceServers = [
+            RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"])
+        ]
+        config.continualGatheringPolicy = .gatherContinually
+
+        let constraints = RTCMediaConstraints(
+            mandatoryConstraints: nil,
+            optionalConstraints: ["DtlsSrtpKeyAgreement": "true"]
+        )
+
+        guard let pc = factory.peerConnection(with: config, constraints: constraints, delegate: nil) else {
+            log.error("[\(self.streamName)] Failed to create RTCPeerConnection")
+            error = "Failed to create peer connection"
+            scheduleRetry()
+            return
+        }
+        self.peerConnection = pc
+        log.info("[\(self.streamName)] PeerConnection created")
+
+        let videoTransceiver = pc.addTransceiver(of: .video)
+        videoTransceiver?.setDirection(.recvOnly, error: nil)
+        log.info("[\(self.streamName)] Video transceiver added (recvOnly)")
+
+        let audioTransceiver = pc.addTransceiver(of: .audio)
+        audioTransceiver?.setDirection(.recvOnly, error: nil)
+        log.info("[\(self.streamName)] Audio transceiver added (recvOnly)")
+
+        pc.delegate = self
+
+        let offerConstraints = RTCMediaConstraints(
+            mandatoryConstraints: [
+                "OfferToReceiveVideo": "true",
+                "OfferToReceiveAudio": "true"
+            ],
+            optionalConstraints: nil
+        )
+
+        do {
+            log.info("[\(self.streamName)] Creating SDP offer...")
+            let offer = try await pc.offer(for: offerConstraints)
+            log.info("[\(self.streamName)] SDP offer created (\(offer.sdp.count) bytes)")
+
+            try await pc.setLocalDescription(offer)
+            log.info("[\(self.streamName)] Local description set")
+
+            log.info("[\(self.streamName)] Negotiating with go2rtc...")
+            let answerSDP = try await service.negotiateWebRTC(
+                streamName: streamName,
+                offerSDP: offer.sdp
+            )
+            log.info("[\(self.streamName)] Got SDP answer (\(answerSDP.count) bytes)")
+
+            let answer = RTCSessionDescription(type: .answer, sdp: answerSDP)
+            try await pc.setRemoteDescription(answer)
+            log.info("[\(self.streamName)] Remote description set — waiting for ICE")
+
+            // Extract video track from transceivers (unified plan)
+            for transceiver in pc.transceivers {
+                let track = transceiver.receiver.track
+                log.info("[\(self.streamName)] Transceiver: kind=\(track?.kind ?? "nil") readyState=\(track?.readyState.rawValue ?? -1)")
+                if let videoTrack = track as? RTCVideoTrack {
+                    log.info("[\(self.streamName)] Found video track from transceiver, isEnabled=\(videoTrack.isEnabled)")
+                    videoTrack.isEnabled = true
+                    self.videoTrack = videoTrack
+                }
+            }
+
+            retryCount = 0
+            error = nil
+        } catch is CancellationError {
+            log.info("[\(self.streamName)] Connection cancelled")
+        } catch {
+            log.error("[\(self.streamName)] Connection failed: \(error)")
+            self.error = error.localizedDescription
+            scheduleRetry()
+        }
+    }
+
+    private func tearDownPeerConnection() {
+        peerConnection?.delegate = nil
+        peerConnection?.close()
+        peerConnection = nil
+        videoTrack = nil
+    }
+
+    func disconnect() {
+        isManuallyDisconnected = true
+        retryTask?.cancel()
+        retryTask = nil
+        isRetrying = false
+        retryCount = 0
+        tearDownPeerConnection()
+        connectionState = .closed
+    }
+
+    // MARK: - Retry Logic
+
+    private func scheduleRetry() {
+        guard !isManuallyDisconnected else { return }
+
+        retryCount += 1
+        isRetrying = true
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
+        let delay = min(
+            Self.baseRetryDelay * pow(2, Double(retryCount - 1)),
+            Self.maxRetryDelay
+        )
+
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+                guard let self, !Task.isCancelled else { return }
+                await self.attemptConnection()
+            } catch {
+                // Cancelled - do nothing
+            }
+        }
+    }
+
+    private func handleConnectionFailure() {
+        guard !isManuallyDisconnected else { return }
+        if error == nil {
+            error = "Connection lost"
+        }
+        scheduleRetry()
+    }
+}
+
+// MARK: - RTCPeerConnectionDelegate
+extension WebRTCClient: RTCPeerConnectionDelegate {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
+        log.info("[delegate] Signaling state: \(String(describing: stateChanged))")
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
+        log.info("[delegate] Stream added — video tracks: \(stream.videoTracks.count), audio tracks: \(stream.audioTracks.count)")
+        Task { @MainActor in
+            if let track = stream.videoTracks.first {
+                log.info("[\(self.streamName)] Video track assigned")
+                self.videoTrack = track
+            }
+        }
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
+        log.info("[delegate] Stream removed")
+    }
+
+    nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
+        log.info("[delegate] Should negotiate")
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        log.info("[delegate] ICE connection state: \(String(describing: newState))")
+        Task { @MainActor in
+            self.connectionState = newState
+
+            switch newState {
+            case .connected, .completed:
+                log.info("[\(self.streamName)] ICE connected!")
+                self.isRetrying = false
+                self.retryCount = 0
+                self.error = nil
+            case .failed:
+                log.error("[\(self.streamName)] ICE failed")
+                self.error = self.error ?? "ICE connection failed"
+                self.handleConnectionFailure()
+            case .disconnected:
+                log.warning("[\(self.streamName)] ICE disconnected — waiting 3s grace period")
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled else { return }
+                    if self.connectionState == .disconnected {
+                        log.warning("[\(self.streamName)] Still disconnected after grace period, retrying")
+                        self.handleConnectionFailure()
+                    }
+                }
+            case .new, .checking, .closed:
+                break
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
+        log.info("[delegate] ICE gathering state: \(String(describing: newState))")
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
+        log.info("[delegate] ICE candidate generated: \(candidate.sdp.prefix(80))...")
+    }
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
+
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+        log.info("[delegate] Data channel opened")
+    }
+}
+
+// MARK: - Async helpers for RTCPeerConnection
+extension RTCPeerConnection {
+    func offer(for constraints: RTCMediaConstraints) async throws -> RTCSessionDescription {
+        try await withCheckedThrowingContinuation { continuation in
+            self.offer(for: constraints) { sdp, error in
+                if let error { continuation.resume(throwing: error) }
+                else if let sdp { continuation.resume(returning: sdp) }
+                else { continuation.resume(throwing: Go2RTCError.negotiationFailed) }
+            }
+        }
+    }
+
+    func setLocalDescription(_ sdp: RTCSessionDescription) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.setLocalDescription(sdp) { error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
+            }
+        }
+    }
+
+    func setRemoteDescription(_ sdp: RTCSessionDescription) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            self.setRemoteDescription(sdp) { error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
+            }
+        }
+    }
+}
