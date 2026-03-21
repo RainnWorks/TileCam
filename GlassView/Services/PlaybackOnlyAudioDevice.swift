@@ -5,7 +5,6 @@ import WebRTC
 /// Recording methods are all no-ops, so the microphone is never activated.
 final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
     private var audioDelegate: RTCAudioDeviceDelegate?
-    private var displayLink: CADisplayLink?
     private var audioEngine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
 
@@ -15,7 +14,7 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
 
     private let sampleRate: Double = 48000
     private let channels: Int = 1
-    private let ioDuration: TimeInterval = 0.02 // 20ms
+    private let ioDuration: TimeInterval = 0.02
 
     // MARK: - Input properties (no-op, no mic)
     var deviceInputSampleRate: Double { sampleRate }
@@ -53,6 +52,7 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
     // MARK: - Playout
 
     func initializePlayout() -> Bool {
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playback, options: [.mixWithOthers])
@@ -63,6 +63,7 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
             print("PlaybackOnlyAudioDevice: session config failed: \(error)")
             return false
         }
+        #endif
         _isPlayoutInitialized = true
         return true
     }
@@ -84,7 +85,6 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
         let outputFormat = engine.outputNode.outputFormat(forBus: 0)
         engine.connect(player, to: engine.mainMixerNode, format: outputFormat)
 
-        // Install a tap-less render callback using a source node
         let frameCount = UInt32(sampleRate * ioDuration)
         let getPlayoutData = delegate.getPlayoutData
 

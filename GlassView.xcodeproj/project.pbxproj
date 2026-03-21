@@ -33,7 +33,7 @@
 		88E724223FFA7DAE82CF309C /* WebRTCFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCFactory.swift; sourceTree = "<group>"; };
 		A3F09335227562118490F42D /* Go2RTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Go2RTCService.swift; sourceTree = "<group>"; };
 		A8C36B678BEB1743CE3CCAA0 /* PlaybackOnlyAudioDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackOnlyAudioDevice.swift; sourceTree = "<group>"; };
-		E11D9842A24774A5BF7FEA76 /* GlassView.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GlassView.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E11D9842A24774A5BF7FEA76 /* GlassView.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GlassView.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F04C827AD6B3C5D9653B5797 /* GlassBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassBackground.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -156,7 +156,6 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					973AE19084EEED9ECA08526D = {
-						DevelopmentTeam = YK42U4LDMG;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -212,17 +211,19 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = 7TNKU576K8;
 				INFOPLIST_FILE = GlassView/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.glassview.app;
+				PRODUCT_BUNDLE_IDENTIFIER = works.rainn.glassview;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Release;
 		};
@@ -278,6 +279,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -335,6 +337,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -352,17 +355,19 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = 7TNKU576K8;
 				INFOPLIST_FILE = GlassView/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.glassview.app;
+				PRODUCT_BUNDLE_IDENTIFIER = works.rainn.glassview;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Debug;
 		};

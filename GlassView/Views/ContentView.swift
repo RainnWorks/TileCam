@@ -21,6 +21,7 @@ struct ContentView: View {
                     .environment(\.showUI, showUI)
                     .environment(\.toggleUI, { [self] in toggleUI() })
                     .ignoresSafeArea()
+                    .onTapGesture { toggleUI() }
 
                 // All UI fades in/out together
                 if showUI {
@@ -72,6 +73,20 @@ struct ContentView: View {
             await appState.refreshStreams()
             scheduleAutoHide()
         }
+        #if targetEnvironment(macCatalyst)
+        .onKeyPress(.space) {
+            toggleUI()
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            if showServerInput {
+                withAnimation { showServerInput = false }
+            } else if showUI {
+                withAnimation { showUI = false }
+            }
+            return .handled
+        }
+        #endif
     }
 
     // MARK: - Auto-hide
@@ -94,6 +109,8 @@ struct ContentView: View {
 
     private func scheduleAutoHide() {
         hideTimer?.cancel()
+        // Don't auto-hide if no streams selected — user needs to see the UI
+        guard !appState.selectedStreams.isEmpty else { return }
         hideTimer = Task {
             try? await Task.sleep(for: autoHideDelay)
             guard !Task.isCancelled else { return }
@@ -120,7 +137,12 @@ struct ContentView: View {
             ServerInputField(
                 initialURL: appState.serverURL,
                 onConnect: { url in
+                    let serverChanged = url != appState.serverURL
                     appState.serverURL = url
+                    if serverChanged {
+                        appState.selectedStreams = []
+                        appState.availableStreams = []
+                    }
                     withAnimation { showServerInput = false }
                     Task { await appState.refreshStreams() }
                 }
@@ -195,15 +217,19 @@ private struct ServerInputField: View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "link")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.4))
                     .font(.caption)
 
-                TextField("http://192.168.1.100:1984", text: $urlInput)
+                TextField("", text: $urlInput, prompt:
+                    Text("http://192.168.1.100:1984")
+                        .foregroundStyle(.white.opacity(0.3))
+                )
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .foregroundStyle(.white)
+                    .tint(.white)
                     .submitLabel(.go)
                     .onSubmit { connect() }
             }
@@ -219,7 +245,7 @@ private struct ServerInputField: View {
                         Text("\(n) streams found").foregroundStyle(.green)
                     case .failure(let msg):
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
-                        Text(msg).foregroundStyle(.red)
+                        Text(msg).foregroundStyle(.red).lineLimit(2)
                     }
                 }
                 .font(.caption2)
@@ -228,6 +254,7 @@ private struct ServerInputField: View {
 
             HStack(spacing: 8) {
                 Button {
+                    guard !testing else { return }
                     Task { await test() }
                 } label: {
                     HStack(spacing: 4) {
@@ -238,7 +265,7 @@ private struct ServerInputField: View {
                     .foregroundStyle(.white.opacity(0.7))
                 }
                 .liquidGlassToken()
-                .disabled(urlInput.isEmpty || testing)
+                .disabled(urlInput.trimmingCharacters(in: .whitespaces).isEmpty || testing)
 
                 Button {
                     connect()
@@ -248,7 +275,7 @@ private struct ServerInputField: View {
                         .foregroundStyle(.white)
                 }
                 .liquidGlassToken()
-                .disabled(urlInput.isEmpty)
+                .disabled(urlInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .onAppear {
@@ -258,6 +285,7 @@ private struct ServerInputField: View {
 
     private var normalizedURL: String {
         var url = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if url.isEmpty { return "" }
         if !url.hasPrefix("http://") && !url.hasPrefix("https://") {
             url = "http://" + url
         }
@@ -266,13 +294,24 @@ private struct ServerInputField: View {
     }
 
     private func connect() {
-        onConnect(normalizedURL)
+        let url = normalizedURL
+        guard !url.isEmpty, URL(string: url) != nil else {
+            withAnimation { status = .failure("Invalid URL") }
+            return
+        }
+        onConnect(url)
     }
 
     private func test() async {
         testing = true
         status = nil
-        let service = Go2RTCService(baseURL: URL(string: normalizedURL)!)
+        let url = normalizedURL
+        guard !url.isEmpty, let parsedURL = URL(string: url) else {
+            withAnimation { status = .failure("Invalid URL") }
+            testing = false
+            return
+        }
+        let service = Go2RTCService(baseURL: parsedURL)
         do {
             let streams = try await service.fetchStreams()
             withAnimation { status = .success(streams.count) }

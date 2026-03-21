@@ -28,6 +28,7 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     private static let maxRetryDelay: TimeInterval = 30
     private static let baseRetryDelay: TimeInterval = 1
+    private static let maxRetryCount = 20
 
     init(service: Go2RTCService, streamName: String) {
         self.factory = WebRTCFactory.shared.factory
@@ -160,6 +161,12 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     private func scheduleRetry() {
         guard !isManuallyDisconnected else { return }
+        guard retryCount < Self.maxRetryCount else {
+            log.error("[\(self.streamName)] Max retries (\(Self.maxRetryCount)) reached, giving up")
+            error = "Connection failed after \(Self.maxRetryCount) attempts"
+            isRetrying = false
+            return
+        }
 
         retryCount += 1
         isRetrying = true

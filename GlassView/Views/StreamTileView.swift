@@ -57,7 +57,11 @@ struct StreamTileView: View {
                 WebRTCVideoView(videoTrack: videoTrack)
                     .background(alignment: .topLeading) {
                         GeometryReader { proxy in
-                            Color.clear.onAppear { contentSize = proxy.size }
+                            Color.clear
+                                .onAppear { contentSize = proxy.size }
+                                .onChange(of: proxy.size) { _, newSize in
+                                    contentSize = newSize
+                                }
                         }
                     }
                     .scaleEffect(
@@ -243,8 +247,7 @@ struct StreamTileView: View {
         let state = StreamViewState(
             zoom: Double(transform.scaleX),
             panX: Double(transform.tx),
-            panY: Double(transform.ty),
-            contentMode: .contain
+            panY: Double(transform.ty)
         )
         LayoutStore.saveViewState(state, for: stream.name)
     }
@@ -303,20 +306,35 @@ struct StreamTileView: View {
 struct WebRTCVideoView: UIViewRepresentable {
     let videoTrack: RTCVideoTrack
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeUIView(context: Context) -> RTCMTLVideoView {
         let view = RTCMTLVideoView()
         view.videoContentMode = .scaleAspectFit
         view.clipsToBounds = true
         videoTrack.add(view)
+        context.coordinator.currentTrack = videoTrack
         return view
     }
 
     func updateUIView(_ uiView: RTCMTLVideoView, context: Context) {
-        videoTrack.add(uiView)
+        // Only re-add if the track actually changed
+        if context.coordinator.currentTrack !== videoTrack {
+            context.coordinator.currentTrack?.remove(uiView)
+            videoTrack.add(uiView)
+            context.coordinator.currentTrack = videoTrack
+        }
     }
 
-    static func dismantleUIView(_ uiView: RTCMTLVideoView, coordinator: ()) {
-        log.info("WebRTCVideoView: dismantled")
+    static func dismantleUIView(_ uiView: RTCMTLVideoView, coordinator: Coordinator) {
+        coordinator.currentTrack?.remove(uiView)
+        coordinator.currentTrack = nil
+    }
+
+    final class Coordinator {
+        var currentTrack: RTCVideoTrack?
     }
 }
 

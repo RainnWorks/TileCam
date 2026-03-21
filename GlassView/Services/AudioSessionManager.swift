@@ -1,17 +1,20 @@
-import AVFoundation
+import Foundation
+
+#if canImport(AVFAudio)
+import AVFAudio
+#endif
 
 enum AudioSessionManager {
-    /// Configure the audio session for multi-stream playback.
-    /// Must be called early (e.g. app launch) before any WebRTC connections.
     static func configure() {
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         do {
-            // .playback allows audio even in silent mode
-            // .mixWithOthers lets multiple WebRTC audio tracks coexist
             try session.setCategory(.playback, options: [.mixWithOthers])
             try session.setActive(true)
         } catch {
             print("AudioSession configuration failed: \(error)")
         }
+        #endif
+        // macOS: no AVAudioSession needed — audio plays through default output
     }
 }

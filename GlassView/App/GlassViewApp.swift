@@ -9,8 +9,6 @@ struct GlassViewApp: App {
 
     init() {
         AudioSessionManager.configure()
-        // Warm up WebRTC factory on a background thread so the first
-        // stream tile doesn't stall the UI
         Task.detached(priority: .utility) {
             WebRTCClient.warmUp()
         }
@@ -30,7 +28,6 @@ final class AppState: ObservableObject {
     @AppStorage("serverURL") var serverURL: String = ""
     @Published var availableStreams: [Stream] = []
     @Published var isConnected = false
-    @Published var globalContentMode: VideoContentMode
 
     @Published var selectedStreams: [Stream] {
         didSet { LayoutStore.saveSelectedStreams(selectedStreams) }
@@ -43,29 +40,42 @@ final class AppState: ObservableObject {
 
     init() {
         self.selectedStreams = LayoutStore.loadSelectedStreams()
-        self.globalContentMode = LayoutStore.loadGlobalContentMode()
     }
+
+    private var refreshTask: Task<Void, Never>?
 
     func refreshStreams() async {
-        log.info("refreshStreams called, serverURL=\(self.serverURL)")
-        guard let service = go2rtcService else {
-            log.error("No go2rtcService — serverURL is empty or invalid")
-            return
-        }
-        do {
-            log.info("Fetching streams from \(service.baseURL.absoluteString)")
-            availableStreams = try await service.fetchStreams()
-            isConnected = true
-            log.info("Connected — found \(self.availableStreams.count) streams: \(self.availableStreams.map(\.name))")
-        } catch {
-            isConnected = false
-            availableStreams = []
-            log.error("refreshStreams failed: \(error)")
-        }
-    }
+        refreshTask?.cancel()
+        let task = Task {
+            log.info("refreshStreams called, serverURL=\(self.serverURL)")
+            guard let service = go2rtcService else {
+                log.error("No go2rtcService — serverURL is empty or invalid")
+                return
+            }
+            do {
+                guard !Task.isCancelled else { return }
+                log.info("Fetching streams from \(service.baseURL.absoluteString)")
+                let streams = try await service.fetchStreams()
+                guard !Task.isCancelled else { return }
+                availableStreams = streams
+                isConnected = true
+                log.info("Connected — found \(streams.count) streams: \(streams.map(\.name))")
 
-    func setGlobalContentMode(_ mode: VideoContentMode) {
-        globalContentMode = mode
-        LayoutStore.saveGlobalContentMode(mode)
+                // Remove selected streams that no longer exist on the server
+                let validNames = Set(streams.map(\.name))
+                let before = self.selectedStreams.count
+                self.selectedStreams.removeAll { !validNames.contains($0.name) }
+                if self.selectedStreams.count != before {
+                    log.info("Removed \(before - self.selectedStreams.count) stale selected streams")
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                isConnected = false
+                availableStreams = []
+                log.error("refreshStreams failed: \(error)")
+            }
+        }
+        refreshTask = task
+        await task.value
     }
 }

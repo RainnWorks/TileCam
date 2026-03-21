@@ -10,12 +10,18 @@ final class Go2RTCService: Sendable {
         self.baseURL = baseURL
     }
 
-    /// Fetch available streams from go2rtc
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
+
     func fetchStreams() async throws -> [Stream] {
         let url = baseURL.appendingPathComponent("api/streams")
         log.info("GET \(url.absoluteString)")
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await Self.session.data(from: url)
         let http = response as? HTTPURLResponse
         log.info("Response status: \(http?.statusCode ?? -1)")
 
@@ -28,27 +34,33 @@ final class Go2RTCService: Sendable {
         let bodyStr = String(data: data, encoding: .utf8) ?? "<binary>"
         log.debug("Response body: \(bodyStr)")
 
-        // go2rtc returns { "streamName": [{"url": "..."}], ... }
-        // Try flexible decoding
         let jsonObj = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         let streamNames = jsonObj.keys.sorted()
         log.info("Parsed \(streamNames.count) streams: \(streamNames)")
         return streamNames.map { Stream(name: $0) }
     }
 
-    /// Perform WebRTC SDP exchange with go2rtc
     func negotiateWebRTC(streamName: String, offerSDP: String) async throws -> String {
-        var components = URLComponents(url: baseURL.appendingPathComponent("api/webrtc"), resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/webrtc"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw Go2RTCError.invalidResponse
+        }
         components.queryItems = [URLQueryItem(name: "src", value: streamName)]
 
-        var request = URLRequest(url: components.url!)
+        guard let url = components.url else {
+            throw Go2RTCError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/sdp", forHTTPHeaderField: "Content-Type")
         request.httpBody = offerSDP.data(using: .utf8)
 
-        log.info("POST \(components.url!.absoluteString) (SDP offer \(offerSDP.count) bytes)")
+        log.info("POST \(url.absoluteString) (SDP offer \(offerSDP.count) bytes)")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await Self.session.data(for: request)
         let http = response as? HTTPURLResponse
         log.info("WebRTC negotiate response: status=\(http?.statusCode ?? -1)")
 
@@ -73,8 +85,8 @@ enum Go2RTCError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse: return "Invalid response from go2rtc server"
-        case .negotiationFailed: return "WebRTC negotiation failed"
+        case .invalidResponse: return "Could not reach go2rtc server"
+        case .negotiationFailed: return "Stream negotiation failed"
         }
     }
 }
