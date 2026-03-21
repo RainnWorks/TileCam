@@ -5,7 +5,7 @@ import WebRTC
 final class WebRTCFactory: @unchecked Sendable {
     static let shared = WebRTCFactory()
 
-    private let queue = DispatchQueue(label: "com.glassview.webrtc.factory")
+    private let queue = DispatchQueue(label: "works.rainn.tilecam.webrtc.factory")
     private var _factory: RTCPeerConnectionFactory?
     private let playbackDevice = PlaybackOnlyAudioDevice()
 

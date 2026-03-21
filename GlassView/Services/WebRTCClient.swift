@@ -3,7 +3,7 @@ import WebRTC
 import Combine
 import os
 
-private let log = Logger(subsystem: "com.glassview.app", category: "WebRTC")
+private let log = Logger(subsystem: "works.rainn.tilecam", category: "WebRTC")
 
 /// Manages a single WebRTC peer connection to a go2rtc stream.
 /// Each stream gets its own WebRTCClient instance, allowing multiple

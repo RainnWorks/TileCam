@@ -1,10 +1,10 @@
 import SwiftUI
 import os
 
-private let log = Logger(subsystem: "com.glassview.app", category: "AppState")
+private let log = Logger(subsystem: "works.rainn.tilecam", category: "AppState")
 
 @main
-struct GlassViewApp: App {
+struct TileCamApp: App {
     @StateObject private var appState = AppState()
 
     init() {

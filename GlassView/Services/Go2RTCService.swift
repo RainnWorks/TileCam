@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let log = Logger(subsystem: "com.glassview.app", category: "Go2RTC")
+private let log = Logger(subsystem: "works.rainn.tilecam", category: "Go2RTC")
 
 final class Go2RTCService: Sendable {
     let baseURL: URL

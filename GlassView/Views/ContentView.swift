@@ -130,7 +130,7 @@ struct ContentView: View {
                 .font(.system(size: 40))
                 .foregroundStyle(.white.opacity(0.7))
 
-            Text("GlassView")
+            Text("TileCam")
                 .font(.title.weight(.semibold))
                 .foregroundStyle(.white)
 

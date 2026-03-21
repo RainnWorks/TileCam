@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "GlassView",
+    name: "TileCam",
     platforms: [.iOS(.v17)],
     products: [
-        .library(name: "GlassView", targets: ["GlassView"])
+        .library(name: "TileCam", targets: ["TileCam"])
     ],
     dependencies: [
         .package(url: "https://github.com/stasel/WebRTC", exact: "140.0.0")
     ],
     targets: [
         .target(
-            name: "GlassView",
+            name: "TileCam",
             dependencies: [
                 .product(name: "WebRTC", package: "WebRTC")
             ],

@@ -2,7 +2,7 @@ import SwiftUI
 import WebRTC
 import os
 
-private let log = Logger(subsystem: "com.glassview.app", category: "StreamTile")
+private let log = Logger(subsystem: "works.rainn.tilecam", category: "StreamTile")
 
 private struct ShowUIKey: EnvironmentKey {
     static let defaultValue = true
