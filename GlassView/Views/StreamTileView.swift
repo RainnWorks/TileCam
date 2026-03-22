@@ -95,10 +95,8 @@ struct StreamTileView: View {
         .onChange(of: client.audioTrack) { _, _ in syncAudioState() }
         .task {
             await client.connect()
-            PhoneSessionManager.shared.registerClient(client, for: stream.name)
         }
         .onDisappear {
-            PhoneSessionManager.shared.unregisterClient(for: stream.name)
             client.disconnect()
         }
     }

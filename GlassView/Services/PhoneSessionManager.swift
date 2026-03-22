@@ -1,13 +1,24 @@
 import Foundation
 import WatchConnectivity
-import WebRTC
-import Combine
 import os
 
 private let log = Logger(subsystem: "works.rainn.tilecam", category: "WatchSession")
 
+/// Message type tags prefixed to sendMessageData payloads.
+enum WatchDataTag: UInt8 {
+    case videoFrame = 0x01
+    case audioChunk = 0x02
+}
+
+/// Streaming modes the Watch can request.
+enum WatchStreamMode: String {
+    case videoAndAudio
+    case videoOnly
+    case audioOnly
+}
+
 /// Manages WatchConnectivity on the iPhone side.
-/// Streams periodic JPEG snapshots from an RTCVideoTrack to the paired Apple Watch.
+/// Streams JPEG snapshots and MP3 audio from go2rtc HTTP endpoints to the Watch.
 @MainActor
 final class PhoneSessionManager: NSObject, ObservableObject {
     static let shared = PhoneSessionManager()
@@ -15,15 +26,12 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     @Published var isWatchReachable = false
 
     private var session: WCSession?
-    private var registeredClients: [String: WebRTCClient] = [:]
-    private var snapshotRenderer: SnapshotRenderer?
-    private var currentTrack: RTCVideoTrack?
-    private var watchedStreamName: String?
-    private var trackObservation: AnyCancellable?
-
-    // For streams not currently displayed on iPhone
-    private var dedicatedClient: WebRTCClient?
     private var go2rtcService: Go2RTCService?
+
+    private var watchedStreamName: String?
+    private var currentMode: WatchStreamMode = .videoAndAudio
+    private var snapshotTask: Task<Void, Never>?
+    private var audioTask: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -50,22 +58,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Client Registration
-
-    func registerClient(_ client: WebRTCClient, for streamName: String) {
-        registeredClients[streamName] = client
-        if watchedStreamName == streamName {
-            attachRenderer(to: client)
-        }
-    }
-
-    func unregisterClient(for streamName: String) {
-        if watchedStreamName == streamName {
-            detachRenderer()
-        }
-        registeredClients.removeValue(forKey: streamName)
-    }
-
     /// Send a specific camera to the Watch (triggered from iPhone UI)
     func sendCameraToWatch(streamName: String) {
         guard let session, session.isReachable else { return }
@@ -75,76 +67,133 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         )
     }
 
-    // MARK: - Snapshot Streaming
+    // MARK: - Stream Management
 
-    private func subscribeToStream(_ streamName: String) {
-        log.info("Watch subscribing to: \(streamName)")
+    private func subscribeToStream(_ streamName: String, mode: WatchStreamMode) {
+        log.info("Watch subscribing to: \(streamName) mode: \(mode.rawValue)")
         unsubscribeFromStream()
         watchedStreamName = streamName
+        currentMode = mode
 
-        if let client = registeredClients[streamName] {
-            attachRenderer(to: client)
-        } else if let service = go2rtcService {
-            log.info("Creating dedicated WebRTC client for Watch: \(streamName)")
-            let client = WebRTCClient(service: service, streamName: streamName)
-            dedicatedClient = client
-            Task {
-                await client.connect()
-            }
-            trackObservation = client.$videoTrack
-                .compactMap { $0 }
-                .first()
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in
-                    guard let self else { return }
-                    self.attachRenderer(to: client)
-                }
+        guard let service = go2rtcService else {
+            log.error("No go2rtcService available for Watch streaming")
+            return
+        }
+
+        if mode != .audioOnly {
+            startVideoStreaming(service: service, streamName: streamName)
+        }
+        if mode != .videoOnly {
+            startAudioStreaming(service: service, streamName: streamName)
         }
     }
 
     private func unsubscribeFromStream() {
-        detachRenderer()
+        snapshotTask?.cancel()
+        snapshotTask = nil
+        audioTask?.cancel()
+        audioTask = nil
         watchedStreamName = nil
-        trackObservation?.cancel()
-        trackObservation = nil
-        dedicatedClient?.disconnect()
-        dedicatedClient = nil
     }
 
-    private func attachRenderer(to client: WebRTCClient) {
-        detachRenderer()
+    // MARK: - Video: MJPEG stream from /api/stream.mjpeg
 
-        guard let videoTrack = client.videoTrack else {
-            trackObservation = client.$videoTrack
-                .compactMap { $0 }
-                .first()
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in
-                    guard let self else { return }
-                    self.attachRenderer(to: client)
+    private func startVideoStreaming(service: Go2RTCService, streamName: String) {
+        snapshotTask = Task.detached { [weak self] in
+            do {
+                let (url, session) = try service.openMJPEGStream(streamName: streamName)
+                let (bytes, _) = try await session.bytes(from: url)
+
+                var buffer = Data()
+                let jpegStart = Data([0xFF, 0xD8]) // JPEG SOI marker
+                let jpegEnd = Data([0xFF, 0xD9])   // JPEG EOI marker
+                var inFrame = false
+
+                for try await byte in bytes {
+                    if Task.isCancelled { break }
+                    buffer.append(byte)
+
+                    if !inFrame {
+                        // Look for JPEG SOI marker
+                        if buffer.count >= 2 && buffer.suffix(2) == jpegStart {
+                            buffer = jpegStart
+                            inFrame = true
+                        } else if buffer.count > 256 {
+                            // Discard multipart headers
+                            buffer.removeAll(keepingCapacity: true)
+                        }
+                    } else {
+                        // Look for JPEG EOI marker
+                        if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
+                            await self?.sendTaggedData(tag: .videoFrame, payload: buffer)
+                            buffer.removeAll(keepingCapacity: true)
+                            inFrame = false
+                        }
+                    }
                 }
-            return
+            } catch {
+                if !Task.isCancelled {
+                    log.error("MJPEG stream failed: \(error)")
+                    // Fallback to polling
+                    await self?.startSnapshotPolling(service: service, streamName: streamName)
+                }
+            }
         }
-
-        let renderer = SnapshotRenderer()
-        renderer.onSnapshot = { data in
-            guard WCSession.default.isReachable else { return }
-            WCSession.default.sendMessageData(data, replyHandler: nil, errorHandler: nil)
-        }
-        videoTrack.add(renderer)
-        snapshotRenderer = renderer
-        currentTrack = videoTrack
-        log.info("Snapshot renderer attached for \(client.streamName)")
     }
 
-    private func detachRenderer() {
-        if let renderer = snapshotRenderer, let track = currentTrack {
-            track.remove(renderer)
+    /// Fallback: poll /api/frame.jpeg if MJPEG stream fails
+    private func startSnapshotPolling(service: Go2RTCService, streamName: String) {
+        snapshotTask = Task {
+            while !Task.isCancelled {
+                do {
+                    let jpegData = try await service.fetchFrame(streamName: streamName)
+                    sendTaggedData(tag: .videoFrame, payload: jpegData)
+                } catch {
+                    if !Task.isCancelled {
+                        log.error("Snapshot fetch failed: \(error)")
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
         }
-        snapshotRenderer = nil
-        currentTrack = nil
-        trackObservation?.cancel()
-        trackObservation = nil
+    }
+
+    // MARK: - Audio: Stream /api/stream.mp3
+
+    private func startAudioStreaming(service: Go2RTCService, streamName: String) {
+        audioTask = Task.detached { [weak self] in
+            do {
+                let (url, streamSession) = try service.openAudioStream(streamName: streamName)
+                let (bytes, _) = try await streamSession.bytes(from: url)
+
+                var buffer = Data()
+                // ~4KB chunks ≈ 250ms of 128kbps MP3
+                let chunkSize = 4096
+
+                for try await byte in bytes {
+                    if Task.isCancelled { break }
+                    buffer.append(byte)
+                    if buffer.count >= chunkSize {
+                        await self?.sendTaggedData(tag: .audioChunk, payload: buffer)
+                        buffer.removeAll(keepingCapacity: true)
+                    }
+                }
+            } catch {
+                if !Task.isCancelled {
+                    log.error("Audio stream failed: \(error)")
+                }
+            }
+        }
+    }
+
+    // MARK: - Send to Watch
+
+    private func sendTaggedData(tag: WatchDataTag, payload: Data) {
+        guard WCSession.default.isReachable else { return }
+        var message = Data(capacity: 1 + payload.count)
+        message.append(tag.rawValue)
+        message.append(payload)
+        WCSession.default.sendMessageData(message, replyHandler: nil, errorHandler: nil)
     }
 }
 
@@ -179,19 +228,7 @@ extension PhoneSessionManager: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        guard let request = message["request"] as? String else { return }
-        Task { @MainActor in
-            switch request {
-            case "subscribe":
-                if let name = message["streamName"] as? String {
-                    self.subscribeToStream(name)
-                }
-            case "unsubscribe":
-                self.unsubscribeFromStream()
-            default:
-                break
-            }
-        }
+        handleMessage(message, replyHandler: nil)
     }
 
     nonisolated func session(
@@ -199,23 +236,31 @@ extension PhoneSessionManager: WCSessionDelegate {
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
+        handleMessage(message, replyHandler: replyHandler)
+    }
+
+    private nonisolated func handleMessage(
+        _ message: [String: Any],
+        replyHandler: (([String: Any]) -> Void)?
+    ) {
         guard let request = message["request"] as? String else {
-            replyHandler([:])
+            replyHandler?([:])
             return
         }
         Task { @MainActor in
             switch request {
             case "subscribe":
                 if let name = message["streamName"] as? String {
-                    self.subscribeToStream(name)
+                    let modeStr = message["mode"] as? String ?? "videoAndAudio"
+                    let mode = WatchStreamMode(rawValue: modeStr) ?? .videoAndAudio
+                    self.subscribeToStream(name, mode: mode)
                 }
-                replyHandler(["status": "ok"])
             case "unsubscribe":
                 self.unsubscribeFromStream()
-                replyHandler(["status": "ok"])
             default:
-                replyHandler([:])
+                break
             }
+            replyHandler?(["status": "ok"])
         }
     }
 }
