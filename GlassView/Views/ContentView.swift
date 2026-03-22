@@ -19,14 +19,11 @@ struct ContentView: View {
                 serverInputPanel
             } else {
                 // Camera feeds
-                GeometryReader { geo in
-                    TileGridView()
-                        .environment(\.showUI, showUI)
-                        .environment(\.toggleUI, { [self] in toggleUI() })
-                        .environment(\.rootSafeArea, geo.safeAreaInsets)
-                        .onTapGesture { toggleUI() }
-                }
-                .ignoresSafeArea()
+                TileGridView()
+                    .environment(\.showUI, showUI)
+                    .environment(\.toggleUI, { [self] in toggleUI() })
+                    .ignoresSafeArea()
+                    .onTapGesture { toggleUI() }
 
                 // All UI fades in/out together
                 if showUI {
