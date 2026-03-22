@@ -1,18 +1,22 @@
 import SwiftUI
 
+/// Auto-hide delay for tap-to-reveal controls.
+private let controlsFadeDelay: TimeInterval = 4
+
 /// Zero-interaction camera view for Glance mode.
-/// Shows the camera feed full-screen with no chrome.
-/// Long-press to access options. Auto-subscribes on appear, unsubscribes on disappear.
+/// Tap to reveal controls (mode, camera switch, exit glance). Tap again or wait to hide.
 struct GlanceCameraView: View {
     @EnvironmentObject var session: WatchSessionManager
     @ObservedObject var settings = WatchSettings.shared
     @Binding var showSettings: Bool
 
-    @State private var showOptions = false
+    @State private var showControls = false
+    @State private var controlsHideTask: Task<Void, Never>?
     @State private var showCameraPicker = false
     @State private var timeoutTask: Task<Void, Never>?
     @State private var isFrameStale = false
     @State private var stalenessTimer: Task<Void, Never>?
+    @State private var selectedMode: StreamMode = .videoAndAudio
 
     private var resolvedCameraName: String? {
         if !settings.glanceDefaultCamera.isEmpty,
@@ -28,13 +32,16 @@ struct GlanceCameraView: View {
 
             if !session.isPhoneReachable {
                 glanceNotReachable
-            } else if let _ = resolvedCameraName {
+            } else if resolvedCameraName != nil {
                 glanceCameraContent
             } else {
                 glanceNoCameras
             }
         }
-        .onAppear { startGlance() }
+        .onAppear {
+            selectedMode = settings.resolvedMode
+            startGlance()
+        }
         .onDisappear { stopGlance() }
         .onChange(of: session.isPhoneReachable) { _, reachable in
             if reachable { startGlance() }
@@ -44,21 +51,30 @@ struct GlanceCameraView: View {
             resetStalenessTimer()
             resetTimeout()
         }
+        .sheet(isPresented: $showCameraPicker) {
+            glanceCameraPicker
+        }
     }
 
     // MARK: - Camera Content
 
     private var glanceCameraContent: some View {
         ZStack {
+            // Video frame
             if let image = session.latestSnapshot {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .opacity(session.isStreamPaused ? 0.4 : (isFrameStale ? 0.7 : 1.0))
+                    .animation(.easeInOut(duration: 0.4), value: session.isStreamPaused)
+                    .animation(.easeInOut(duration: 0.4), value: isFrameStale)
                     .ignoresSafeArea()
             } else {
                 VStack(spacing: 6) {
-                    ProgressView()
-                        .tint(.white.opacity(0.5))
+                    Image(systemName: "video.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.2))
+                        .symbolEffect(.pulse, isActive: session.isSubscribing)
                     if let name = resolvedCameraName {
                         Text(name.replacingOccurrences(of: "_", with: " "))
                             .font(.caption2)
@@ -67,36 +83,8 @@ struct GlanceCameraView: View {
                 }
             }
 
-            // Subtle camera name pill — top left, fades after frames arrive
-            if session.latestSnapshot != nil {
-                VStack {
-                    HStack {
-                        if let name = resolvedCameraName {
-                            Text(name.replacingOccurrences(of: "_", with: " "))
-                                .font(.system(size: 9).weight(.medium))
-                                .foregroundStyle(.white.opacity(0.4))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.black.opacity(0.3), in: Capsule())
-                        }
-                        Spacer()
-
-                        // Staleness indicator
-                        if isFrameStale && !session.isStreamPaused {
-                            frozenBadge
-                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.top, 4)
-                    Spacer()
-                }
-                .animation(.easeInOut(duration: 0.3), value: isFrameStale)
-            }
-
-            // Paused overlay
+            // Status overlays (priority: paused > frozen)
             if session.isStreamPaused {
-                Color.black.opacity(0.5).ignoresSafeArea()
                 VStack(spacing: 4) {
                     Image(systemName: "pause.circle")
                         .font(.title3)
@@ -105,49 +93,183 @@ struct GlanceCameraView: View {
                         .font(.system(size: 9).weight(.medium))
                         .foregroundStyle(.orange.opacity(0.6))
                 }
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            } else if isFrameStale && session.latestSnapshot != nil {
+                frozenBadge
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
 
-            // Audio indicator
-            if session.audioPlayer.isPlaying {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.green.opacity(0.6))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.bottom, 4)
-                }
+            // Always-visible: subtle camera name + audio indicator
+            if session.latestSnapshot != nil && !showControls {
+                persistentHUD
+            }
+
+            // Tap-to-reveal controls
+            if showControls {
+                controlsOverlay
+                    .transition(.opacity)
             }
         }
         .contentShape(Rectangle())
-        .onLongPressGesture(minimumDuration: 0.5) {
-            showOptions = true
-        }
-        .confirmationDialog("Options", isPresented: $showOptions) {
-            if session.availableStreams.count > 1 {
-                Button("Switch Camera") { showCameraPicker = true }
+        .onTapGesture { toggleControls() }
+        .animation(.easeInOut(duration: 0.25), value: showControls)
+    }
+
+    // MARK: - Persistent HUD (always visible, minimal)
+
+    private var persistentHUD: some View {
+        VStack {
+            HStack {
+                if let name = resolvedCameraName {
+                    Text(name.replacingOccurrences(of: "_", with: " "))
+                        .font(.system(size: 9).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.25), in: Capsule())
+                }
+                Spacer()
             }
-            Button("Settings") { showSettings = true }
-            Button("Exit Glance") {
-                settings.glanceModeEnabled = false
+            .padding(.horizontal, 4)
+            .padding(.top, 4)
+
+            Spacer()
+
+            // Audio indicator
+            if session.audioPlayer.isPlaying {
+                HStack(spacing: 3) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 8))
+                    Text("Audio")
+                        .font(.system(size: 8))
+                }
+                .foregroundStyle(.green.opacity(0.5))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6)
+                .padding(.bottom, 4)
             }
-        }
-        .sheet(isPresented: $showCameraPicker) {
-            glanceCameraPicker
         }
     }
 
-    // MARK: - States
+    // MARK: - Controls Overlay (tap to show/hide)
+
+    private var controlsOverlay: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 10) {
+                // Mode cycle
+                Button { cycleMode() } label: {
+                    Image(systemName: selectedMode.icon)
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.white.opacity(0.15), in: Circle())
+                }
+
+                // Camera switch
+                if session.availableStreams.count > 1 {
+                    Button { showCameraPicker = true } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath.camera")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(.white.opacity(0.15), in: Circle())
+                    }
+                }
+
+                Spacer()
+
+                // Exit Glance → switch to standard mode
+                Button {
+                    settings.glanceModeEnabled = false
+                } label: {
+                    Image(systemName: "rectangle.grid.1x2")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.white.opacity(0.15), in: Circle())
+                }
+
+                // Settings
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(.white.opacity(0.15), in: Circle())
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Controls Toggle
+
+    private func toggleControls() {
+        if showControls {
+            hideControls()
+        } else {
+            showControls = true
+            scheduleAutoHide()
+        }
+    }
+
+    private func hideControls() {
+        showControls = false
+        controlsHideTask?.cancel()
+        controlsHideTask = nil
+    }
+
+    private func scheduleAutoHide() {
+        controlsHideTask?.cancel()
+        controlsHideTask = Task {
+            try? await Task.sleep(for: .seconds(controlsFadeDelay))
+            guard !Task.isCancelled else { return }
+            showControls = false
+        }
+    }
+
+    // MARK: - Mode Cycling
+
+    private func cycleMode() {
+        let allModes = StreamMode.allCases
+        guard let idx = allModes.firstIndex(of: selectedMode) else { return }
+        selectedMode = allModes[(idx + 1) % allModes.count]
+        session.changeMode(selectedMode)
+        scheduleAutoHide()
+    }
+
+    // MARK: - Frozen Badge
+
+    private var frozenBadge: some View {
+        VStack {
+            HStack {
+                Spacer()
+                HStack(spacing: 2) {
+                    Circle().fill(.yellow).frame(width: 4, height: 4)
+                    Text("Frozen")
+                        .font(.system(size: 8).weight(.medium))
+                        .foregroundStyle(.yellow)
+                }
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(.black.opacity(0.5), in: Capsule())
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 4)
+            Spacer()
+        }
+    }
+
+    // MARK: - Empty States
 
     private var glanceNotReachable: some View {
         VStack(spacing: 8) {
-            Image(systemName: "iphone.slash")
+            Image(systemName: "iphone.radiowaves.left.and.right")
                 .font(.title3)
                 .foregroundStyle(.white.opacity(0.3))
+                .symbolEffect(.pulse)
             Text("Waiting for iPhone")
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.3))
@@ -165,20 +287,6 @@ struct GlanceCameraView: View {
         }
     }
 
-    private var frozenBadge: some View {
-        HStack(spacing: 2) {
-            Circle()
-                .fill(.yellow)
-                .frame(width: 4, height: 4)
-            Text("Frozen")
-                .font(.system(size: 8).weight(.medium))
-                .foregroundStyle(.yellow)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(.black.opacity(0.5), in: Capsule())
-    }
-
     // MARK: - Camera Picker
 
     private var glanceCameraPicker: some View {
@@ -188,7 +296,8 @@ struct GlanceCameraView: View {
                     showCameraPicker = false
                     settings.glanceDefaultCamera = name
                     session.unsubscribe()
-                    session.subscribe(to: name, mode: settings.resolvedMode)
+                    session.subscribe(to: name, mode: selectedMode)
+                    hideControls()
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "video.fill")
@@ -216,7 +325,7 @@ struct GlanceCameraView: View {
     private func startGlance() {
         guard session.isPhoneReachable, let camera = resolvedCameraName else { return }
         guard session.subscribedStream != camera else { return }
-        session.subscribe(to: camera, mode: settings.resolvedMode)
+        session.subscribe(to: camera, mode: selectedMode)
         resetTimeout()
         resetStalenessTimer()
     }
@@ -224,6 +333,7 @@ struct GlanceCameraView: View {
     private func stopGlance() {
         timeoutTask?.cancel()
         stalenessTimer?.cancel()
+        controlsHideTask?.cancel()
         session.unsubscribe()
     }
 
@@ -233,7 +343,6 @@ struct GlanceCameraView: View {
         timeoutTask = Task {
             try? await Task.sleep(for: .seconds(settings.timeoutSeconds))
             guard !Task.isCancelled else { return }
-            // In glance mode, just disconnect silently — no prompt
             session.unsubscribe()
         }
     }

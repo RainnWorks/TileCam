@@ -3,6 +3,9 @@ import SwiftUI
 /// Frame staleness threshold — show warning after 5 seconds with no new frame.
 private let frameStalenessThreshold: TimeInterval = 5
 
+/// Auto-hide delay for tap-to-reveal controls.
+private let controlsFadeDelay: TimeInterval = 4
+
 struct CameraSnapshotView: View {
     let initialStreamName: String
     let initialZoom: CGFloat
@@ -22,6 +25,10 @@ struct CameraSnapshotView: View {
     @State private var selectedMode: StreamMode = .videoAndAudio
     @State private var viewportDebounce: Task<Void, Never>?
 
+    /// Tap-to-show/hide controls (matches iPhone pattern)
+    @State private var showControls = true
+    @State private var controlsHideTask: Task<Void, Never>?
+
     /// Auto-timeout
     @State private var timeoutTask: Task<Void, Never>?
     @State private var showTimeoutPrompt = false
@@ -39,7 +46,7 @@ struct CameraSnapshotView: View {
     private let maxZoom: CGFloat = 6.0
     private let minZoom: CGFloat = 1.0
 
-    // MARK: - Init adapter (keeps call sites using named param 'streamName')
+    // MARK: - Init adapter
 
     init(streamName: String, initialZoom: CGFloat = 1.0, initialCenterX: CGFloat = 0.5, initialCenterY: CGFloat = 0.5) {
         self.initialStreamName = streamName
@@ -62,6 +69,8 @@ struct CameraSnapshotView: View {
                 // Overlays — priority: timeout > paused > stale
                 overlayStack
             }
+            .contentShape(Rectangle())
+            .onTapGesture { toggleControls() }
         }
         .navigationTitle(activeStreamName.replacingOccurrences(of: "_", with: " "))
         .navigationBarTitleDisplayMode(.inline)
@@ -95,9 +104,13 @@ struct CameraSnapshotView: View {
         }
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
-                toolbarContent
+                if showControls {
+                    toolbarContent
+                        .transition(.opacity)
+                }
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: showControls)
         .sheet(isPresented: $showCameraPicker) {
             cameraPicker
         }
@@ -114,12 +127,40 @@ struct CameraSnapshotView: View {
             )
             resetTimeout()
             resetStalenessTimer()
+            scheduleAutoHide()
         }
         .onDisappear {
             viewportDebounce?.cancel()
             timeoutTask?.cancel()
             stalenessTimer?.cancel()
+            controlsHideTask?.cancel()
             session.unsubscribe()
+        }
+    }
+
+    // MARK: - Controls Toggle
+
+    private func toggleControls() {
+        if showControls {
+            hideControls()
+        } else {
+            showControls = true
+            scheduleAutoHide()
+        }
+    }
+
+    private func hideControls() {
+        showControls = false
+        controlsHideTask?.cancel()
+        controlsHideTask = nil
+    }
+
+    private func scheduleAutoHide() {
+        controlsHideTask?.cancel()
+        controlsHideTask = Task {
+            try? await Task.sleep(for: .seconds(controlsFadeDelay))
+            guard !Task.isCancelled else { return }
+            showControls = false
         }
     }
 
@@ -131,7 +172,6 @@ struct CameraSnapshotView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
-                // Dim when paused or stale
                 .opacity(session.isStreamPaused ? 0.4 : (isFrameStale ? 0.7 : 1.0))
                 .animation(.easeInOut(duration: 0.4), value: session.isStreamPaused)
                 .animation(.easeInOut(duration: 0.4), value: isFrameStale)
@@ -140,8 +180,8 @@ struct CameraSnapshotView: View {
             connectingView
         }
 
-        // Audio indicator with label
-        if session.audioPlayer.isPlaying && selectedMode != .audioOnly {
+        // Audio indicator
+        if session.audioPlayer.isPlaying && selectedMode != .audioOnly && !showControls {
             VStack {
                 Spacer()
                 HStack(spacing: 3) {
@@ -155,6 +195,7 @@ struct CameraSnapshotView: View {
                 .padding(.bottom, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .transition(.opacity)
         }
     }
 
@@ -193,7 +234,6 @@ struct CameraSnapshotView: View {
 
     @ViewBuilder
     private var overlayStack: some View {
-        // Show only highest-priority overlay
         if showTimeoutPrompt {
             timeoutPromptOverlay
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -206,15 +246,12 @@ struct CameraSnapshotView: View {
         }
     }
 
-    /// Frame frozen badge — top right
     private var frozenBadge: some View {
         VStack {
             HStack {
                 Spacer()
                 HStack(spacing: 3) {
-                    Circle()
-                        .fill(.yellow)
-                        .frame(width: 5, height: 5)
+                    Circle().fill(.yellow).frame(width: 5, height: 5)
                     Text("Frozen")
                         .font(.system(size: 9).weight(.medium))
                 }
@@ -229,7 +266,6 @@ struct CameraSnapshotView: View {
         }
     }
 
-    /// Stream paused by iPhone backgrounding
     private var pausedOverlay: some View {
         VStack(spacing: 6) {
             Image(systemName: "pause.circle")
@@ -241,7 +277,6 @@ struct CameraSnapshotView: View {
         }
     }
 
-    /// Timeout prompt
     private var timeoutPromptOverlay: some View {
         VStack(spacing: 8) {
             Text("Still watching?")
@@ -262,13 +297,14 @@ struct CameraSnapshotView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Toolbar (distilled)
+    // MARK: - Toolbar
 
     private var toolbarContent: some View {
         HStack(spacing: 10) {
-            // Mode cycle button — single tap cycles through modes
+            // Mode cycle
             Button {
                 cycleMode()
+                scheduleAutoHide()
             } label: {
                 Image(systemName: selectedMode.icon)
                     .font(.caption)
@@ -277,10 +313,11 @@ struct CameraSnapshotView: View {
                     .background(.white.opacity(0.15), in: Circle())
             }
 
-            // Camera switch — only when multiple cameras
+            // Camera switch
             if session.availableStreams.count > 1 {
                 Button {
                     showCameraPicker = true
+                    scheduleAutoHide()
                 } label: {
                     Image(systemName: "arrow.triangle.2.circlepath.camera")
                         .font(.caption)
@@ -289,6 +326,15 @@ struct CameraSnapshotView: View {
             }
 
             Spacer()
+
+            // Glance mode toggle
+            Button {
+                settings.glanceModeEnabled = true
+            } label: {
+                Image(systemName: "eye")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             // Zoom indicator
             if zoom > 1.01 {
@@ -353,7 +399,7 @@ struct CameraSnapshotView: View {
         resetStalenessTimer()
     }
 
-    // MARK: - Gestures (aspect-ratio-corrected pan)
+    // MARK: - Gestures
 
     private func dragGesture(in size: CGSize) -> some Gesture {
         DragGesture()

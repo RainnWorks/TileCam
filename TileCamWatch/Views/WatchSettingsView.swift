@@ -12,7 +12,7 @@ struct WatchSettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Glance Mode")
                             .font(.body)
-                        Text("Raise wrist to view camera instantly")
+                        Text("Tap for controls, tap to hide")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -48,6 +48,9 @@ struct WatchSettingsView: View {
                 }
             } header: {
                 Text("Streaming")
+            } footer: {
+                Text("Default Mode controls audio in Glance mode. Choose Video Only for silent viewing.")
+                    .font(.caption2)
             }
         }
         .navigationTitle("Settings")
