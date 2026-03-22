@@ -12,6 +12,8 @@ struct TileCamApp: App {
         Task.detached(priority: .utility) {
             WebRTCClient.warmUp()
         }
+        // Activate WatchConnectivity early
+        _ = PhoneSessionManager.shared
     }
 
     var body: some Scene {
@@ -83,9 +85,12 @@ final class AppState: ObservableObject {
     private func updateService() {
         guard !serverURL.isEmpty, let url = URL(string: serverURL) else {
             go2rtcService = nil
+            PhoneSessionManager.shared.updateService(nil)
             return
         }
-        go2rtcService = Go2RTCService(baseURL: url)
+        let service = Go2RTCService(baseURL: url)
+        go2rtcService = service
+        PhoneSessionManager.shared.updateService(service)
     }
 
     private var refreshTask: Task<Void, Never>?
@@ -106,6 +111,7 @@ final class AppState: ObservableObject {
                 availableStreams = streams
                 isConnected = true
                 log.info("Connected — found \(streams.count) streams: \(streams.map(\.name))")
+                PhoneSessionManager.shared.updateAvailableStreams(streams.map(\.name))
 
                 // Remove selected streams that no longer exist on the server
                 let validNames = Set(streams.map(\.name))

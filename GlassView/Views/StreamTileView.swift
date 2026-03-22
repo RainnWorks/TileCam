@@ -95,8 +95,10 @@ struct StreamTileView: View {
         .onChange(of: client.audioTrack) { _, _ in syncAudioState() }
         .task {
             await client.connect()
+            PhoneSessionManager.shared.registerClient(client, for: stream.name)
         }
         .onDisappear {
+            PhoneSessionManager.shared.unregisterClient(for: stream.name)
             client.disconnect()
         }
     }
@@ -210,6 +212,21 @@ struct StreamTileView: View {
                 }
 
                 Spacer()
+
+                if PhoneSessionManager.shared.isWatchReachable {
+                    Button {
+                        PhoneSessionManager.shared.sendCameraToWatch(streamName: stream.name)
+                        zoomHaptic.impactOccurred()
+                    } label: {
+                        Image(systemName: "applewatch")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.4), in: Capsule())
+                    }
+                    .accessibilityLabel("Send to Apple Watch")
+                }
 
                 if transform.scaleX > 1.01 {
                     let zoomText = String(format: "%.1fx", transform.scaleX)
