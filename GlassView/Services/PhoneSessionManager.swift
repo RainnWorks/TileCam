@@ -1,7 +1,6 @@
 import Foundation
 import WatchConnectivity
 import UIKit
-import Combine
 import os
 
 private let log = Logger(subsystem: "works.rainn.tilecam", category: "WatchSession")
@@ -19,25 +18,14 @@ enum WatchStreamMode: String {
     case audioOnly
 }
 
-/// Normalized viewport: zoom level + center position (0-1).
-struct ViewportUpdate {
-    let streamName: String
-    let zoom: CGFloat
-    let centerX: CGFloat
-    let centerY: CGFloat
-}
-
 /// Manages WatchConnectivity on the iPhone side.
 /// Streams JPEG snapshots and MP3 audio from go2rtc HTTP endpoints to the Watch.
-/// Supports bidirectional viewport sync — both iPhone and Watch can control zoom/pan.
+/// The Watch controls its own viewport; iPhone just crops frames to match.
 @MainActor
 final class PhoneSessionManager: NSObject, ObservableObject {
     static let shared = PhoneSessionManager()
 
     @Published var isWatchReachable = false
-
-    /// Publishes viewport changes originating from the Watch, so StreamTileView can apply them.
-    let remoteViewportPublisher = PassthroughSubject<ViewportUpdate, Never>()
 
     private var session: WCSession?
     private var go2rtcService: Go2RTCService?
@@ -47,7 +35,7 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     private var snapshotTask: Task<Void, Never>?
     private var audioTask: Task<Void, Never>?
 
-    /// Current viewport used for cropping MJPEG frames.
+    /// Current viewport from Watch, used for cropping MJPEG frames.
     private var viewportZoom: CGFloat = 1.0
     private var viewportCenterX: CGFloat = 0.5
     private var viewportCenterY: CGFloat = 0.5
@@ -77,56 +65,37 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    /// Send a specific camera to the Watch (triggered from iPhone UI).
-    func sendCameraToWatch(streamName: String) {
-        guard let session, session.isReachable else { return }
-        session.sendMessage(
-            ["action": "showCamera", "streamName": streamName],
-            replyHandler: nil
-        )
-    }
-
-    // MARK: - Viewport (from iPhone's StreamTileView)
-
-    /// Called by StreamTileView when the user zooms/pans on iPhone.
-    /// Updates the crop viewport AND forwards to the Watch.
-    func updateStreamViewport(streamName: String, zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
-        guard streamName == watchedStreamName else { return }
-        viewportZoom = zoom
-        viewportCenterX = centerX
-        viewportCenterY = centerY
-
-        // Forward to Watch so it knows the current viewport
+    /// One-shot: send a camera + current viewport to the Watch.
+    /// Watch auto-navigates and opens at the given zoom/pan.
+    func sendCameraToWatch(streamName: String, zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
         guard let session, session.isReachable else { return }
         session.sendMessage([
-            "action": "viewportSync",
+            "action": "showCamera",
+            "streamName": streamName,
             "zoom": Double(zoom),
             "centerX": Double(centerX),
             "centerY": Double(centerY)
-        ], replyHandler: nil, errorHandler: nil)
+        ], replyHandler: nil)
     }
 
     // MARK: - Stream Management
 
-    private func subscribeToStream(_ streamName: String, mode: WatchStreamMode) {
+    private func subscribeToStream(_ streamName: String, mode: WatchStreamMode, viewport: (CGFloat, CGFloat, CGFloat)?) {
         log.info("Watch subscribing to: \(streamName) mode: \(mode.rawValue)")
         unsubscribeFromStream()
         watchedStreamName = streamName
         currentMode = mode
 
+        // Apply initial viewport if provided
+        if let (z, cx, cy) = viewport {
+            viewportZoom = z
+            viewportCenterX = cx
+            viewportCenterY = cy
+        }
+
         guard let service = go2rtcService else {
             log.error("No go2rtcService available for Watch streaming")
             return
-        }
-
-        // Send current viewport to Watch on subscribe
-        if let session, session.isReachable {
-            session.sendMessage([
-                "action": "viewportSync",
-                "zoom": Double(viewportZoom),
-                "centerX": Double(viewportCenterX),
-                "centerY": Double(viewportCenterY)
-            ], replyHandler: nil, errorHandler: nil)
         }
 
         if mode != .audioOnly {
@@ -329,24 +298,25 @@ extension PhoneSessionManager: WCSessionDelegate {
                 if let name = message["streamName"] as? String {
                     let modeStr = message["mode"] as? String ?? "videoAndAudio"
                     let mode = WatchStreamMode(rawValue: modeStr) ?? .videoAndAudio
-                    self.subscribeToStream(name, mode: mode)
+                    // Watch may include initial viewport from "showCamera"
+                    var viewport: (CGFloat, CGFloat, CGFloat)?
+                    if let z = message["zoom"] as? Double {
+                        let cx = message["centerX"] as? Double ?? 0.5
+                        let cy = message["centerY"] as? Double ?? 0.5
+                        viewport = (z, cx, cy)
+                    }
+                    self.subscribeToStream(name, mode: mode, viewport: viewport)
                 }
             case "unsubscribe":
                 self.unsubscribeFromStream()
             case "viewport":
-                // Watch-originated viewport change
+                // Watch-originated viewport update (for cropping only)
                 let zoom = message["zoom"] as? Double ?? 1.0
                 let cx = message["centerX"] as? Double ?? 0.5
                 let cy = message["centerY"] as? Double ?? 0.5
                 self.viewportZoom = zoom
                 self.viewportCenterX = cx
                 self.viewportCenterY = cy
-                // Push to iPhone's StreamTileView so it mirrors the Watch's zoom/pan
-                if let name = self.watchedStreamName {
-                    self.remoteViewportPublisher.send(ViewportUpdate(
-                        streamName: name, zoom: zoom, centerX: cx, centerY: cy
-                    ))
-                }
             default:
                 break
             }

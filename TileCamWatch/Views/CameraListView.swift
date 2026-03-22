@@ -1,11 +1,19 @@
 import SwiftUI
 
+/// Navigation value that carries the stream name + optional initial viewport.
+struct CameraDestination: Hashable {
+    let streamName: String
+    var zoom: CGFloat = 1.0
+    var centerX: CGFloat = 0.5
+    var centerY: CGFloat = 0.5
+}
+
 struct CameraListView: View {
     @EnvironmentObject var session: WatchSessionManager
-    @State private var navigateToStream: String?
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Group {
                 if !session.isPhoneReachable {
                     notReachableView
@@ -16,14 +24,24 @@ struct CameraListView: View {
                 }
             }
             .navigationTitle("TileCam")
-            .navigationDestination(for: String.self) { streamName in
-                CameraSnapshotView(streamName: streamName)
-                    .environmentObject(session)
+            .navigationDestination(for: CameraDestination.self) { dest in
+                CameraSnapshotView(
+                    streamName: dest.streamName,
+                    initialZoom: dest.zoom,
+                    initialCenterX: dest.centerX,
+                    initialCenterY: dest.centerY
+                )
+                .environmentObject(session)
             }
-            .onChange(of: session.pushedStreamName) { _, pushed in
+            .onChange(of: session.pushedCamera) { _, pushed in
                 if let pushed {
-                    navigateToStream = pushed
-                    session.pushedStreamName = nil
+                    navigationPath.append(CameraDestination(
+                        streamName: pushed.streamName,
+                        zoom: pushed.zoom,
+                        centerX: pushed.centerX,
+                        centerY: pushed.centerY
+                    ))
+                    session.pushedCamera = nil
                 }
             }
         }
@@ -31,7 +49,7 @@ struct CameraListView: View {
 
     private var streamList: some View {
         List(session.availableStreams, id: \.self) { name in
-            NavigationLink(value: name) {
+            NavigationLink(value: CameraDestination(streamName: name)) {
                 HStack(spacing: 10) {
                     Image(systemName: "video.fill")
                         .font(.caption)

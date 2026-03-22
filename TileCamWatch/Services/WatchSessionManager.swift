@@ -42,13 +42,16 @@ final class WatchSessionManager: NSObject, ObservableObject {
     @Published var subscribedStream: String?
     @Published var currentMode: StreamMode = .videoAndAudio
 
-    /// Viewport synced from iPhone (zoom + normalized center)
-    @Published var syncedZoom: CGFloat = 1.0
-    @Published var syncedCenterX: CGFloat = 0.5
-    @Published var syncedCenterY: CGFloat = 0.5
+    /// Pushed from iPhone when it wants the Watch to show a specific camera.
+    /// Includes initial viewport (zoom, centerX, centerY).
+    @Published var pushedCamera: PushedCamera?
 
-    /// Pushed from iPhone when it wants the Watch to show a specific camera
-    @Published var pushedStreamName: String?
+    struct PushedCamera {
+        let streamName: String
+        let zoom: CGFloat
+        let centerX: CGFloat
+        let centerY: CGFloat
+    }
 
     let audioPlayer = AudioChunkPlayer()
 
@@ -63,7 +66,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
         self.session = s
     }
 
-    func subscribe(to streamName: String, mode: StreamMode) {
+    func subscribe(to streamName: String, mode: StreamMode, zoom: CGFloat = 1.0, centerX: CGFloat = 0.5, centerY: CGFloat = 0.5) {
         subscribedStream = streamName
         currentMode = mode
         latestSnapshot = nil
@@ -77,7 +80,10 @@ final class WatchSessionManager: NSObject, ObservableObject {
             [
                 "request": "subscribe",
                 "streamName": streamName,
-                "mode": mode.rawValue
+                "mode": mode.rawValue,
+                "zoom": Double(zoom),
+                "centerX": Double(centerX),
+                "centerY": Double(centerY)
             ],
             replyHandler: nil,
             errorHandler: { error in
@@ -187,17 +193,13 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let action = message["action"] as? String else { return }
         Task { @MainActor in
-            switch action {
-            case "showCamera":
-                if let streamName = message["streamName"] as? String {
-                    self.pushedStreamName = streamName
-                }
-            case "viewportSync":
-                self.syncedZoom = message["zoom"] as? CGFloat ?? 1.0
-                self.syncedCenterX = message["centerX"] as? CGFloat ?? 0.5
-                self.syncedCenterY = message["centerY"] as? CGFloat ?? 0.5
-            default:
-                break
+            if action == "showCamera", let streamName = message["streamName"] as? String {
+                self.pushedCamera = PushedCamera(
+                    streamName: streamName,
+                    zoom: message["zoom"] as? CGFloat ?? 1.0,
+                    centerX: message["centerX"] as? CGFloat ?? 0.5,
+                    centerY: message["centerY"] as? CGFloat ?? 0.5
+                )
             }
         }
     }

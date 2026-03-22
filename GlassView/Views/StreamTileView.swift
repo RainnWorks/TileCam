@@ -36,7 +36,6 @@ struct StreamTileView: View {
     @State private var contentSize: CGSize = .zero
     @State private var showRecoveryFlash = false
     @State private var wasDisconnected = false
-    @State private var isApplyingRemoteViewport = false
 
     private let zoomHaptic = UIImpactFeedbackGenerator(style: .medium)
 
@@ -94,10 +93,6 @@ struct StreamTileView: View {
         .onChange(of: appState.isGlobalAudioEnabled) { _, _ in syncAudioState() }
         .onChange(of: appState.mutedStreamNames) { _, _ in syncAudioState() }
         .onChange(of: client.audioTrack) { _, _ in syncAudioState() }
-        .onReceive(PhoneSessionManager.shared.remoteViewportPublisher) { update in
-            guard update.streamName == stream.name else { return }
-            applyRemoteViewport(update)
-        }
         .task {
             await client.connect()
         }
@@ -115,13 +110,9 @@ struct StreamTileView: View {
                 .background(alignment: .topLeading) {
                     GeometryReader { proxy in
                         Color.clear
-                            .onAppear {
-                                contentSize = proxy.size
-                                pushViewportToWatch()
-                            }
+                            .onAppear { contentSize = proxy.size }
                             .onChange(of: proxy.size) { _, newSize in
                                 contentSize = newSize
-                                pushViewportToWatch()
                             }
                     }
                 }
@@ -222,8 +213,10 @@ struct StreamTileView: View {
 
                 if PhoneSessionManager.shared.isWatchReachable {
                     Button {
-                        pushViewportToWatch()
-                        PhoneSessionManager.shared.sendCameraToWatch(streamName: stream.name)
+                        let (zoom, cx, cy) = currentNormalizedViewport()
+                        PhoneSessionManager.shared.sendCameraToWatch(
+                            streamName: stream.name, zoom: zoom, centerX: cx, centerY: cy
+                        )
                         zoomHaptic.impactOccurred()
                     } label: {
                         Image(systemName: "applewatch")
@@ -375,59 +368,17 @@ struct StreamTileView: View {
             panY: Double(transform.ty)
         )
         LayoutStore.saveViewState(state, for: stream.name)
-        pushViewportToWatch()
     }
 
-    // MARK: - Watch Viewport Sync
-
-    /// Convert current transform to normalized viewport and push to Watch via PhoneSessionManager.
-    private func pushViewportToWatch() {
-        guard !isApplyingRemoteViewport else { return }
-        guard contentSize.width > 0, contentSize.height > 0 else { return }
+    /// Returns the current zoom/pan as a normalized viewport (zoom, centerX, centerY).
+    private func currentNormalizedViewport() -> (CGFloat, CGFloat, CGFloat) {
+        guard contentSize.width > 0, contentSize.height > 0 else {
+            return (transform.scaleX, 0.5, 0.5)
+        }
         let zoom = transform.scaleX
         let centerX = (contentSize.width / 2.0 - transform.tx) / (contentSize.width * zoom)
         let centerY = (contentSize.height / 2.0 - transform.ty) / (contentSize.height * zoom)
-        PhoneSessionManager.shared.updateStreamViewport(
-            streamName: stream.name,
-            zoom: zoom,
-            centerX: centerX,
-            centerY: centerY
-        )
-    }
-
-    /// Apply a viewport change originating from the Watch.
-    private func applyRemoteViewport(_ update: ViewportUpdate) {
-        guard contentSize.width > 0, contentSize.height > 0 else { return }
-        isApplyingRemoteViewport = true
-
-        let zoom = max(update.zoom, 1.0)
-        let newTransform: CGAffineTransform
-        if zoom <= 1.01 {
-            newTransform = .identity
-        } else {
-            let tx = contentSize.width / 2.0 - update.centerX * contentSize.width * zoom
-            let ty = contentSize.height / 2.0 - update.centerY * contentSize.height * zoom
-            newTransform = CGAffineTransform(a: zoom, b: 0, c: 0, d: zoom, tx: tx, ty: ty)
-        }
-
-        let capped = limitTransform(newTransform)
-        withAnimation(.smooth(duration: 0.3)) {
-            transform = capped
-            lastTransform = capped
-        }
-
-        let state = StreamViewState(
-            zoom: Double(capped.scaleX),
-            panX: Double(capped.tx),
-            panY: Double(capped.ty)
-        )
-        LayoutStore.saveViewState(state, for: stream.name)
-
-        // Reset flag after animation settles
-        Task {
-            try? await Task.sleep(for: .milliseconds(350))
-            isApplyingRemoteViewport = false
-        }
+        return (zoom, centerX, centerY)
     }
 
     // MARK: - Audio
