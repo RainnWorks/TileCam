@@ -20,10 +20,12 @@
 		DF0314DFC40FF78972474BDA /* TileGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBCE6FEDDD03572ED8F70CA /* TileGridView.swift */; };
 		EB3B869F306C26E7B089F010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 806189DE7D7D0CC0C2D22C44 /* Assets.xcassets */; };
 		FB3F1D92557C85D8E6EDE46C /* PlaybackOnlyAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88C1D43F8945033048962AA2 /* PlaybackOnlyAudioDevice.swift */; };
+		397DC29CA9EA7D2B15693474 /* AudioWaveformIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8280F6FC397DC29CA9EA7D2B /* AudioWaveformIndicator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassBackground.swift; sourceTree = "<group>"; };
+		8280F6FC397DC29CA9EA7D2B /* AudioWaveformIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveformIndicator.swift; sourceTree = "<group>"; };
 		2029643D2311D3947CB7BE53 /* Go2RTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Go2RTCService.swift; sourceTree = "<group>"; };
 		2959141B67B771756C647528 /* WebRTCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCClient.swift; sourceTree = "<group>"; };
 		7527947D237D6DEA89275766 /* AudioSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionManager.swift; sourceTree = "<group>"; };
@@ -66,6 +68,7 @@
 		3894C9D831F4EC74720FE9D4 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				8280F6FC397DC29CA9EA7D2B /* AudioWaveformIndicator.swift */,
 				1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */,
 			);
 			path = Components;
@@ -204,6 +207,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7BA9A19D09B42BCB0319366B /* AudioSessionManager.swift in Sources */,
+				397DC29CA9EA7D2B15693474 /* AudioWaveformIndicator.swift in Sources */,
 				74A1D7DC59FFE86BB4F79CF8 /* ContentView.swift in Sources */,
 				A700858E8D7DAA7E587EF49B /* GlassBackground.swift in Sources */,
 				1638F83C880CA6E2CD0AEBA5 /* Go2RTCService.swift in Sources */,

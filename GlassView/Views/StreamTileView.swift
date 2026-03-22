@@ -57,125 +57,13 @@ struct StreamTileView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { toggleUI() }
 
-            if let videoTrack = client.videoTrack {
-                WebRTCVideoView(videoTrack: videoTrack)
-                    .background(alignment: .topLeading) {
-                        GeometryReader { proxy in
-                            Color.clear
-                                .onAppear { contentSize = proxy.size }
-                                .onChange(of: proxy.size) { _, newSize in
-                                    contentSize = newSize
-                                }
-                        }
-                    }
-                    .scaleEffect(
-                        x: transform.scaleX,
-                        y: transform.scaleY,
-                        anchor: .zero
-                    )
-                    .offset(x: transform.tx, y: transform.ty)
-                    .gesture(
-                        SimultaneousGesture(magnifyGesture, dragGesture)
-                    )
-                    .gesture(doubleTapGesture)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 1.02)),
-                            removal: .opacity
-                        )
-                    )
-            }
+            videoLayer
+            statusOverlay
+            recoveryFlashBorder
+            audioIndicator
 
-            // Status overlays
-            switch client.connectionState {
-            case .connected, .completed:
-                EmptyView()
-            case .failed:
-                failedOverlay
-            case .disconnected:
-                statusCenter(icon: "wifi.slash", label: "Disconnected", color: .orange)
-            case .new, .checking:
-                connectingOverlay
-                    .transition(.opacity)
-            case .closed:
-                statusCenter(icon: "xmark.circle", label: "Stream ended", color: .secondary)
-            @unknown default:
-                EmptyView()
-            }
-
-            // Recovery flash border
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(Color.green.opacity(showRecoveryFlash ? 0.5 : 0), lineWidth: 1.5)
-                .animation(.smooth(duration: 0.6), value: showRecoveryFlash)
-
-            // Audio waveform indicator (always visible, independent of UI)
-            if isStreamAudible {
-                VStack {
-                    HStack {
-                        Spacer()
-                        AudioWaveformIndicator()
-                            .padding(6)
-                    }
-                    Spacer()
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                .allowsHitTesting(false)
-            }
-
-            // Bottom bar
             if showUI {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Text(stream.name.replacingOccurrences(of: "_", with: " "))
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.black.opacity(0.4), in: Capsule())
-
-                        stateIcon
-                            .animation(.smooth(duration: 0.5), value: client.connectionState)
-
-                        if client.isRetrying {
-                            HStack(spacing: 3) {
-                                ProgressView()
-                                    .tint(.white)
-                                    .scaleEffect(0.5)
-                                Text("\(client.retryCount)")
-                                    .font(.system(size: 9).monospaced())
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.black.opacity(0.4), in: Capsule())
-                        }
-
-                        Spacer()
-
-                        if transform.scaleX > 1.01 {
-                            let zoomText = String(format: "%.1fx", transform.scaleX)
-                            Text(zoomText)
-                                .font(.system(size: 9).monospaced())
-                                .foregroundStyle(.white.opacity(0.5))
-                                .contentTransition(.numericText())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(.black.opacity(0.4), in: Capsule())
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                        removal: .scale(scale: 1.1).combined(with: .opacity)
-                                    )
-                                )
-                                .animation(.smooth(duration: 0.2), value: zoomText)
-                        }
-                    }
-                    .padding(6)
-                }
-                .transition(.opacity)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(stream.name.replacingOccurrences(of: "_", with: " ")), \(stateLabel)")
+                bottomBar
             }
         }
         .clipped()
@@ -211,6 +99,136 @@ struct StreamTileView: View {
         .onDisappear {
             client.disconnect()
         }
+    }
+
+    // MARK: - View Layers
+
+    @ViewBuilder
+    private var videoLayer: some View {
+        if let videoTrack = client.videoTrack {
+            WebRTCVideoView(videoTrack: videoTrack)
+                .background(alignment: .topLeading) {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { contentSize = proxy.size }
+                            .onChange(of: proxy.size) { _, newSize in
+                                contentSize = newSize
+                            }
+                    }
+                }
+                .scaleEffect(
+                    x: transform.scaleX,
+                    y: transform.scaleY,
+                    anchor: .zero
+                )
+                .offset(x: transform.tx, y: transform.ty)
+                .gesture(
+                    SimultaneousGesture(magnifyGesture, dragGesture)
+                )
+                .gesture(doubleTapGesture)
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 1.02)),
+                        removal: .opacity
+                    )
+                )
+        }
+    }
+
+    @ViewBuilder
+    private var statusOverlay: some View {
+        switch client.connectionState {
+        case .connected, .completed:
+            EmptyView()
+        case .failed:
+            failedOverlay
+        case .disconnected:
+            statusCenter(icon: "wifi.slash", label: "Disconnected", color: .orange)
+        case .new, .checking:
+            connectingOverlay
+                .transition(.opacity)
+        case .closed:
+            statusCenter(icon: "xmark.circle", label: "Stream ended", color: .secondary)
+        @unknown default:
+            EmptyView()
+        }
+    }
+
+    private var recoveryFlashBorder: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .stroke(Color.green.opacity(showRecoveryFlash ? 0.5 : 0), lineWidth: 1.5)
+            .animation(.smooth(duration: 0.6), value: showRecoveryFlash)
+    }
+
+    @ViewBuilder
+    private var audioIndicator: some View {
+        if isStreamAudible {
+            VStack {
+                HStack {
+                    Spacer()
+                    AudioWaveformIndicator()
+                        .padding(6)
+                }
+                Spacer()
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var bottomBar: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 6) {
+                Text(stream.name.replacingOccurrences(of: "_", with: " "))
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.4), in: Capsule())
+
+                stateIcon
+                    .animation(.smooth(duration: 0.5), value: client.connectionState)
+
+                if client.isRetrying {
+                    HStack(spacing: 3) {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.5)
+                        Text("\(client.retryCount)")
+                            .font(.system(size: 9).monospaced())
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.4), in: Capsule())
+                }
+
+                Spacer()
+
+                if transform.scaleX > 1.01 {
+                    let zoomText = String(format: "%.1fx", transform.scaleX)
+                    Text(zoomText)
+                        .font(.system(size: 9).monospaced())
+                        .foregroundStyle(.white.opacity(0.5))
+                        .contentTransition(.numericText())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.4), in: Capsule())
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .scale(scale: 1.1).combined(with: .opacity)
+                            )
+                        )
+                        .animation(.smooth(duration: 0.2), value: zoomText)
+                }
+            }
+            .padding(6)
+        }
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(stream.name.replacingOccurrences(of: "_", with: " ")), \(stateLabel)")
     }
 
     // MARK: - Gestures
