@@ -40,6 +40,70 @@ final class Go2RTCService: Sendable {
         return streamNames.map { Stream(name: $0) }
     }
 
+    /// Fetches a single JPEG frame from the camera via go2rtc HTTP API.
+    func fetchFrame(streamName: String) async throws -> Data {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/frame.jpeg"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw Go2RTCError.invalidResponse
+        }
+        components.queryItems = [URLQueryItem(name: "src", value: streamName)]
+
+        guard let url = components.url else {
+            throw Go2RTCError.invalidResponse
+        }
+
+        let (data, response) = try await Self.session.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw Go2RTCError.invalidResponse
+        }
+        return data
+    }
+
+    /// Opens an MJPEG video stream from go2rtc. Returns URL + long-lived session.
+    func openMJPEGStream(streamName: String) throws -> (URL, URLSession) {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/stream.mjpeg"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw Go2RTCError.invalidResponse
+        }
+        components.queryItems = [URLQueryItem(name: "src", value: streamName)]
+
+        guard let url = components.url else {
+            throw Go2RTCError.invalidResponse
+        }
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 0
+        let streamSession = URLSession(configuration: config)
+        return (url, streamSession)
+    }
+
+    /// Opens an MP3 audio stream from go2rtc. Returns URL + long-lived session.
+    func openAudioStream(streamName: String) throws -> (URL, URLSession) {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/stream.mp3"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw Go2RTCError.invalidResponse
+        }
+        components.queryItems = [URLQueryItem(name: "src", value: streamName)]
+
+        guard let url = components.url else {
+            throw Go2RTCError.invalidResponse
+        }
+
+        // Use a long-lived session for streaming
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 0 // no timeout for streaming
+        let streamSession = URLSession(configuration: config)
+        return (url, streamSession)
+    }
+
     func negotiateWebRTC(streamName: String, offerSDP: String) async throws -> String {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent("api/webrtc"),

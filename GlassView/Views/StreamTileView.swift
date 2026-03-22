@@ -37,6 +37,9 @@ struct StreamTileView: View {
     @State private var showRecoveryFlash = false
     @State private var wasDisconnected = false
 
+    /// Track Watch button usage for discoverability (show label for first 3 sends)
+    @AppStorage("watchSendCount") private var watchSendCount: Int = 0
+
     private let zoomHaptic = UIImpactFeedbackGenerator(style: .medium)
 
     init(stream: Stream, service: Go2RTCService) {
@@ -211,6 +214,31 @@ struct StreamTileView: View {
 
                 Spacer()
 
+                if PhoneSessionManager.shared.isWatchReachable {
+                    Button {
+                        let (zoom, cx, cy) = currentNormalizedViewport()
+                        PhoneSessionManager.shared.sendCameraToWatch(
+                            streamName: stream.name, zoom: zoom, centerX: cx, centerY: cy
+                        )
+                        zoomHaptic.impactOccurred()
+                        watchSendCount += 1
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "applewatch")
+                                .font(.system(size: 9))
+                            if watchSendCount < 3 {
+                                Text("Watch")
+                                    .font(.system(size: 8).weight(.medium))
+                            }
+                        }
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.4), in: Capsule())
+                    }
+                    .accessibilityLabel("Send to Apple Watch")
+                }
+
                 if transform.scaleX > 1.01 {
                     let zoomText = String(format: "%.1fx", transform.scaleX)
                     Text(zoomText)
@@ -350,6 +378,17 @@ struct StreamTileView: View {
             panY: Double(transform.ty)
         )
         LayoutStore.saveViewState(state, for: stream.name)
+    }
+
+    /// Returns the current zoom/pan as a normalized viewport (zoom, centerX, centerY).
+    private func currentNormalizedViewport() -> (CGFloat, CGFloat, CGFloat) {
+        guard contentSize.width > 0, contentSize.height > 0 else {
+            return (transform.scaleX, 0.5, 0.5)
+        }
+        let zoom = transform.scaleX
+        let centerX = (contentSize.width / 2.0 - transform.tx) / (contentSize.width * zoom)
+        let centerY = (contentSize.height / 2.0 - transform.ty) / (contentSize.height * zoom)
+        return (zoom, centerX, centerY)
     }
 
     // MARK: - Audio

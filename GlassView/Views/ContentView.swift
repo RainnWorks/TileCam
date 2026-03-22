@@ -2,8 +2,10 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var phoneSession = PhoneSessionManager.shared
     @State private var showUI = true
     @State private var showServerInput = false
+    @State private var showWatchSettings = false
     @State private var hideTimer: Task<Void, Never>?
     @State private var animateTokens = false
 
@@ -49,8 +51,28 @@ struct ContentView: View {
                             .accessibilityLabel(appState.isGlobalAudioEnabled ? "Audio on" : "Audio muted")
                             .accessibilityHint("Double-tap to toggle audio")
 
+                            if phoneSession.isWatchReachable {
+                                Button {
+                                    withAnimation(.smooth(duration: 0.25)) {
+                                        showWatchSettings.toggle()
+                                        showServerInput = false
+                                    }
+                                    keepUIVisible()
+                                } label: {
+                                    Image(systemName: "applewatch")
+                                        .font(.body)
+                                        .foregroundStyle(.white)
+                                }
+                                .liquidGlassCircle()
+                                .contentShape(Rectangle())
+                                .accessibilityLabel("Watch settings")
+                            }
+
                             Button {
-                                withAnimation { showServerInput.toggle() }
+                                withAnimation {
+                                    showServerInput.toggle()
+                                    showWatchSettings = false
+                                }
                                 keepUIVisible()
                             } label: {
                                 Image(systemName: "server.rack")
@@ -85,11 +107,24 @@ struct ContentView: View {
                         serverInputPanel
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
+
+                    // Watch settings overlay
+                    if showWatchSettings {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
+                            }
+
+                        watchSettingsPanel
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    }
                 }
             }
         }
         .animation(.smooth(duration: 0.25), value: showUI)
         .animation(.smooth(duration: 0.25), value: showServerInput)
+        .animation(.smooth(duration: 0.25), value: showWatchSettings)
         .task {
             await appState.refreshStreams()
             scheduleAutoHide()
@@ -100,7 +135,9 @@ struct ContentView: View {
             return .handled
         }
         .onKeyPress(.escape) {
-            if showServerInput {
+            if showWatchSettings {
+                withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
+            } else if showServerInput {
                 withAnimation { showServerInput = false }
             } else if showUI {
                 withAnimation { showUI = false }
@@ -149,6 +186,7 @@ struct ContentView: View {
             showUI.toggle()
             if !showUI {
                 showServerInput = false
+                showWatchSettings = false
             }
         }
         if showUI {
@@ -167,7 +205,7 @@ struct ContentView: View {
         hideTimer = Task {
             try? await Task.sleep(for: autoHideDelay)
             guard !Task.isCancelled else { return }
-            if !showServerInput {
+            if !showServerInput && !showWatchSettings {
                 withAnimation(.smooth(duration: 0.4)) {
                     showUI = false
                 }
@@ -189,6 +227,20 @@ struct ContentView: View {
                 }
                 withAnimation { showServerInput = false }
                 Task { await appState.refreshStreams() }
+            }
+        )
+    }
+
+    // MARK: - Watch Settings Panel
+
+    private var watchSettingsPanel: some View {
+        WatchSettingsPanel(
+            wristBehavior: Binding(
+                get: { WristBehavior(rawValue: appState.wristBehavior) ?? .eco },
+                set: { appState.wristBehavior = $0.rawValue }
+            ),
+            onDismiss: {
+                withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
             }
         )
     }
