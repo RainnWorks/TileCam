@@ -10,9 +10,28 @@ struct CameraDestination: Hashable {
 
 struct CameraListView: View {
     @EnvironmentObject var session: WatchSessionManager
+    @ObservedObject var settings = WatchSettings.shared
     @State private var navigationPath = NavigationPath()
+    @State private var showSettings = false
 
     var body: some View {
+        Group {
+            if settings.glanceModeEnabled {
+                GlanceCameraView(showSettings: $showSettings)
+                    .environmentObject(session)
+                    .sheet(isPresented: $showSettings) {
+                        NavigationStack {
+                            WatchSettingsView()
+                                .environmentObject(session)
+                        }
+                    }
+            } else {
+                standardNavigation
+            }
+        }
+    }
+
+    private var standardNavigation: some View {
         NavigationStack(path: $navigationPath) {
             Group {
                 if !session.isPhoneReachable {
@@ -35,10 +54,8 @@ struct CameraListView: View {
             }
             .onChange(of: session.pushedCamera) { _, pushed in
                 guard let pushed else { return }
-                // Fix #4: Pop to root first to prevent double-push / stacked dead views
                 if !navigationPath.isEmpty {
                     navigationPath = NavigationPath()
-                    // Delay to let the pop animate before pushing
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(300))
                         navigationPath.append(CameraDestination(
@@ -57,6 +74,18 @@ struct CameraListView: View {
                     ))
                 }
                 session.pushedCamera = nil
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        WatchSettingsView()
+                            .environmentObject(session)
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
@@ -81,11 +110,12 @@ struct CameraListView: View {
 
     private var notReachableView: some View {
         VStack(spacing: 12) {
-            Image(systemName: "iphone.slash")
+            Image(systemName: "iphone.radiowaves.left.and.right")
                 .font(.title2)
                 .foregroundStyle(.secondary)
+                .symbolEffect(.pulse)
 
-            Text("Reconnecting to\niPhone...")
+            Text("Make sure TileCam\nis open on iPhone")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -94,11 +124,11 @@ struct CameraListView: View {
 
     private var noStreamsView: some View {
         VStack(spacing: 12) {
-            Image(systemName: "video.slash")
+            Image(systemName: "video.badge.plus")
                 .font(.title2)
                 .foregroundStyle(.secondary)
 
-            Text("No cameras\navailable")
+            Text("Add a camera on\niPhone to get started")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

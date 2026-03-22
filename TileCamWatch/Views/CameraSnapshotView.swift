@@ -1,18 +1,19 @@
 import SwiftUI
 
-/// Auto-timeout after 10 minutes of streaming to save battery.
-private let streamTimeoutSeconds: TimeInterval = 600
-
 /// Frame staleness threshold — show warning after 5 seconds with no new frame.
 private let frameStalenessThreshold: TimeInterval = 5
 
 struct CameraSnapshotView: View {
-    let streamName: String
+    let initialStreamName: String
     let initialZoom: CGFloat
     let initialCenterX: CGFloat
     let initialCenterY: CGFloat
 
     @EnvironmentObject var session: WatchSessionManager
+    @ObservedObject var settings = WatchSettings.shared
+
+    /// Mutable stream name — updates when switching cameras in-place.
+    @State private var activeStreamName: String = ""
 
     @State private var zoom: CGFloat = 1.0
     @State private var centerX: CGFloat = 0.5
@@ -21,22 +22,31 @@ struct CameraSnapshotView: View {
     @State private var selectedMode: StreamMode = .videoAndAudio
     @State private var viewportDebounce: Task<Void, Never>?
 
-    /// Fix #7: Auto-timeout
+    /// Auto-timeout
     @State private var timeoutTask: Task<Void, Never>?
     @State private var showTimeoutPrompt = false
 
-    /// Fix #2: Frame staleness detection
+    /// Frame staleness detection
     @State private var isFrameStale = false
     @State private var stalenessTimer: Task<Void, Never>?
 
-    /// Fix #6: Camera switching sheet
+    /// Camera switching sheet
     @State private var showCameraPicker = false
 
-    /// Fix #8: Track the source image aspect ratio for correct pan mapping
+    /// Track source image aspect ratio for correct pan mapping
     @State private var sourceAspect: CGFloat = 16.0 / 9.0
 
     private let maxZoom: CGFloat = 6.0
     private let minZoom: CGFloat = 1.0
+
+    // MARK: - Init adapter (keeps call sites using named param 'streamName')
+
+    init(streamName: String, initialZoom: CGFloat = 1.0, initialCenterX: CGFloat = 0.5, initialCenterY: CGFloat = 0.5) {
+        self.initialStreamName = streamName
+        self.initialZoom = initialZoom
+        self.initialCenterX = initialCenterX
+        self.initialCenterY = initialCenterY
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -49,23 +59,11 @@ struct CameraSnapshotView: View {
                     audioOnlyView
                 }
 
-                // Fix #2: Staleness overlay
-                if isFrameStale && session.latestSnapshot != nil && !session.isStreamPaused {
-                    stalenessOverlay
-                }
-
-                // Fix #3: Stream paused overlay
-                if session.isStreamPaused {
-                    pausedOverlay
-                }
-
-                // Fix #7: Timeout prompt
-                if showTimeoutPrompt {
-                    timeoutPromptOverlay
-                }
+                // Overlays — priority: timeout > paused > stale
+                overlayStack
             }
         }
-        .navigationTitle(streamName.replacingOccurrences(of: "_", with: " "))
+        .navigationTitle(activeStreamName.replacingOccurrences(of: "_", with: " "))
         .navigationBarTitleDisplayMode(.inline)
         .focusable()
         .digitalCrownRotation(
@@ -84,14 +82,11 @@ struct CameraSnapshotView: View {
             sendViewport()
         }
         .onChange(of: session.lastFrameTime) { _, _ in
-            // Fix #2: Reset staleness on new frame
             isFrameStale = false
             resetStalenessTimer()
-            // Fix #7: Reset timeout on activity
             resetTimeout()
         }
         .onChange(of: session.latestSnapshot) { _, newImage in
-            // Fix #8: Track source aspect ratio
             if let img = newImage {
                 let w = img.size.width
                 let h = img.size.height
@@ -100,38 +95,21 @@ struct CameraSnapshotView: View {
         }
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
-                HStack(spacing: 8) {
-                    modePicker
-
-                    // Fix #6: Camera switch button
-                    if session.availableStreams.count > 1 {
-                        Button {
-                            showCameraPicker = true
-                        } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath.camera")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if zoom > 1.01 {
-                        Text(String(format: "%.1fx", zoom))
-                            .font(.system(size: 10).monospaced())
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
-                }
+                toolbarContent
             }
         }
         .sheet(isPresented: $showCameraPicker) {
             cameraPicker
         }
         .onAppear {
+            activeStreamName = initialStreamName
+            selectedMode = settings.resolvedMode
             zoom = max(initialZoom, 1.0)
             centerX = initialCenterX
             centerY = initialCenterY
             dragStart = CGSize(width: centerX, height: centerY)
             session.subscribe(
-                to: streamName, mode: selectedMode,
+                to: activeStreamName, mode: selectedMode,
                 zoom: zoom, centerX: centerX, centerY: centerY
             )
             resetTimeout()
@@ -153,28 +131,46 @@ struct CameraSnapshotView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
+                // Dim when paused or stale
+                .opacity(session.isStreamPaused ? 0.4 : (isFrameStale ? 0.7 : 1.0))
+                .animation(.easeInOut(duration: 0.4), value: session.isStreamPaused)
+                .animation(.easeInOut(duration: 0.4), value: isFrameStale)
                 .gesture(dragGesture(in: size))
         } else {
-            VStack(spacing: 8) {
-                ProgressView()
-                Text(session.isSubscribing ? "Connecting..." : "Waiting for frames...")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            connectingView
         }
 
-        if session.audioPlayer.isPlaying {
+        // Audio indicator with label
+        if session.audioPlayer.isPlaying && selectedMode != .audioOnly {
             VStack {
                 Spacer()
-                HStack {
+                HStack(spacing: 3) {
                     Image(systemName: "waveform")
-                        .font(.caption2)
-                        .foregroundStyle(.green)
-                    Spacer()
+                        .font(.system(size: 8))
+                    Text("Audio")
+                        .font(.system(size: 8))
                 }
+                .foregroundStyle(.green.opacity(0.6))
                 .padding(.horizontal, 4)
                 .padding(.bottom, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+        }
+    }
+
+    private var connectingView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "video.fill")
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.2))
+                .symbolEffect(.pulse, isActive: session.isSubscribing)
+
+            Text(session.isSubscribing
+                 ? "Connecting..."
+                 : "Waiting for \(activeStreamName.replacingOccurrences(of: "_", with: " "))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
     }
 
@@ -187,27 +183,39 @@ struct CameraSnapshotView: View {
                 .foregroundStyle(session.audioPlayer.isPlaying ? .green : .secondary)
                 .symbolEffect(.pulse, isActive: session.audioPlayer.isPlaying)
 
-            Text(streamName.replacingOccurrences(of: "_", with: " "))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             Text(session.audioPlayer.isPlaying ? "Listening..." : "Connecting...")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - Overlays
+    // MARK: - Overlay Stack
 
-    /// Fix #2: Frame staleness warning
-    private var stalenessOverlay: some View {
+    @ViewBuilder
+    private var overlayStack: some View {
+        // Show only highest-priority overlay
+        if showTimeoutPrompt {
+            timeoutPromptOverlay
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        } else if session.isStreamPaused {
+            pausedOverlay
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        } else if isFrameStale && session.latestSnapshot != nil {
+            frozenBadge
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        }
+    }
+
+    /// Frame frozen badge — top right
+    private var frozenBadge: some View {
         VStack {
             HStack {
                 Spacer()
                 HStack(spacing: 3) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 8))
-                    Text("Stale")
+                    Circle()
+                        .fill(.yellow)
+                        .frame(width: 5, height: 5)
+                    Text("Frozen")
                         .font(.system(size: 9).weight(.medium))
                 }
                 .foregroundStyle(.yellow)
@@ -221,20 +229,19 @@ struct CameraSnapshotView: View {
         }
     }
 
-    /// Fix #3: Stream paused overlay
+    /// Stream paused by iPhone backgrounding
     private var pausedOverlay: some View {
         VStack(spacing: 6) {
             Image(systemName: "pause.circle")
                 .font(.title3)
                 .foregroundStyle(.orange.opacity(0.8))
-            Text("iPhone\nbackgrounded")
+            Text("iPhone in background")
                 .font(.system(size: 10).weight(.medium))
                 .foregroundStyle(.orange.opacity(0.6))
-                .multilineTextAlignment(.center)
         }
     }
 
-    /// Fix #7: Timeout prompt
+    /// Timeout prompt
     private var timeoutPromptOverlay: some View {
         VStack(spacing: 8) {
             Text("Still watching?")
@@ -255,38 +262,61 @@ struct CameraSnapshotView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Mode Picker
+    // MARK: - Toolbar (distilled)
 
-    private var modePicker: some View {
-        HStack(spacing: 12) {
-            ForEach(StreamMode.allCases) { mode in
+    private var toolbarContent: some View {
+        HStack(spacing: 10) {
+            // Mode cycle button — single tap cycles through modes
+            Button {
+                cycleMode()
+            } label: {
+                Image(systemName: selectedMode.icon)
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(.white.opacity(0.15), in: Circle())
+            }
+
+            // Camera switch — only when multiple cameras
+            if session.availableStreams.count > 1 {
                 Button {
-                    selectedMode = mode
-                    session.changeMode(mode)
+                    showCameraPicker = true
                 } label: {
-                    Image(systemName: mode.icon)
+                    Image(systemName: "arrow.triangle.2.circlepath.camera")
                         .font(.caption)
-                        .foregroundStyle(selectedMode == mode ? .white : .secondary)
+                        .foregroundStyle(.secondary)
                 }
+            }
+
+            Spacer()
+
+            // Zoom indicator
+            if zoom > 1.01 {
+                Text(String(format: "%.1fx", zoom))
+                    .font(.system(size: 10).monospaced())
+                    .foregroundStyle(.white.opacity(0.5))
             }
         }
     }
 
-    // MARK: - Camera Picker (Fix #6)
+    // MARK: - Mode Cycling
+
+    private func cycleMode() {
+        let allModes = StreamMode.allCases
+        guard let currentIndex = allModes.firstIndex(of: selectedMode) else { return }
+        let nextIndex = (currentIndex + 1) % allModes.count
+        selectedMode = allModes[nextIndex]
+        session.changeMode(selectedMode)
+    }
+
+    // MARK: - Camera Picker
 
     private var cameraPicker: some View {
         NavigationStack {
-            List(session.availableStreams.filter { $0 != streamName }, id: \.self) { name in
+            List(session.availableStreams, id: \.self) { name in
                 Button {
                     showCameraPicker = false
-                    // Switch to new camera by unsubscribing and re-subscribing
-                    session.unsubscribe()
-                    session.subscribe(to: name, mode: selectedMode)
-                    // Reset viewport for new camera
-                    zoom = 1.0
-                    centerX = 0.5
-                    centerY = 0.5
-                    dragStart = .zero
+                    switchToCamera(name)
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "video.fill")
@@ -294,6 +324,12 @@ struct CameraSnapshotView: View {
                             .foregroundStyle(.secondary)
                         Text(name.replacingOccurrences(of: "_", with: " "))
                             .font(.body)
+                        if name == activeStreamName {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                        }
                     }
                 }
             }
@@ -303,22 +339,33 @@ struct CameraSnapshotView: View {
         }
     }
 
-    // MARK: - Gestures (Fix #8: aspect ratio correction)
+    private func switchToCamera(_ name: String) {
+        guard name != activeStreamName else { return }
+        session.unsubscribe()
+        activeStreamName = name
+        zoom = 1.0
+        centerX = 0.5
+        centerY = 0.5
+        dragStart = .zero
+        isFrameStale = false
+        session.subscribe(to: name, mode: selectedMode)
+        resetTimeout()
+        resetStalenessTimer()
+    }
+
+    // MARK: - Gestures (aspect-ratio-corrected pan)
 
     private func dragGesture(in size: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 guard zoom > 1.0 else { return }
-                // Fix #8: Use source aspect ratio to compute the actual displayed image size
                 let viewAspect = size.width / size.height
                 let displayW: CGFloat
                 let displayH: CGFloat
                 if sourceAspect > viewAspect {
-                    // Letterboxed (pillarboxed) — image fills width
                     displayW = size.width
                     displayH = size.width / sourceAspect
                 } else {
-                    // Image fills height
                     displayH = size.height
                     displayW = size.height * sourceAspect
                 }
@@ -348,22 +395,20 @@ struct CameraSnapshotView: View {
 
     // MARK: - Timers
 
-    /// Fix #7: Reset the auto-timeout countdown.
     private func resetTimeout() {
         timeoutTask?.cancel()
         showTimeoutPrompt = false
+        guard settings.hasTimeout else { return }
         timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(streamTimeoutSeconds))
+            try? await Task.sleep(for: .seconds(settings.timeoutSeconds))
             guard !Task.isCancelled else { return }
             showTimeoutPrompt = true
-            // If user doesn't respond within 60 seconds, auto-disconnect
             try? await Task.sleep(for: .seconds(60))
             guard !Task.isCancelled, showTimeoutPrompt else { return }
             session.unsubscribe()
         }
     }
 
-    /// Fix #2: Reset the staleness detection timer.
     private func resetStalenessTimer() {
         stalenessTimer?.cancel()
         isFrameStale = false

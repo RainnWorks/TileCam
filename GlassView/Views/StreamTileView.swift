@@ -37,6 +37,9 @@ struct StreamTileView: View {
     @State private var showRecoveryFlash = false
     @State private var wasDisconnected = false
 
+    /// Track Watch button usage for discoverability (show label for first 3 sends)
+    @AppStorage("watchSendCount") private var watchSendCount: Int = 0
+
     private let zoomHaptic = UIImpactFeedbackGenerator(style: .medium)
 
     init(stream: Stream, service: Go2RTCService) {
@@ -218,16 +221,12 @@ struct StreamTileView: View {
                             streamName: stream.name, zoom: zoom, centerX: cx, centerY: cy
                         )
                         zoomHaptic.impactOccurred()
-                        // Fix #10: Mark as discovered after first use
-                        if !UserDefaults.standard.bool(forKey: "watchButtonDiscovered") {
-                            UserDefaults.standard.set(true, forKey: "watchButtonDiscovered")
-                        }
+                        watchSendCount += 1
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "applewatch")
                                 .font(.system(size: 9))
-                            // Fix #10: Show label hint on first appearance
-                            if !UserDefaults.standard.bool(forKey: "watchButtonDiscovered") {
+                            if watchSendCount < 3 {
                                 Text("Watch")
                                     .font(.system(size: 8).weight(.medium))
                             }
