@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var animateTokens = false
 
     private let autoHideDelay: Duration = .seconds(4)
+    private let haptic = UIImpactFeedbackGenerator(style: .light)
 
     var body: some View {
         ZStack {
@@ -41,6 +42,7 @@ struct ContentView: View {
                             }
                             .liquidGlassCircle()
                             .contentShape(Rectangle())
+                            .accessibilityLabel("Server settings")
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
@@ -85,6 +87,21 @@ struct ContentView: View {
                 withAnimation { showServerInput = false }
             } else if showUI {
                 withAnimation { showUI = false }
+            }
+            return .handled
+        }
+        .onKeyPress(characters: .decimalDigits) { press in
+            guard showUI, let digit = Int(press.characters), digit >= 1,
+                  digit <= appState.availableStreams.count else {
+                return .ignored
+            }
+            let stream = appState.availableStreams[digit - 1]
+            withAnimation(.smooth(duration: 0.2)) {
+                if appState.selectedStreams.contains(stream) {
+                    appState.selectedStreams.removeAll { $0 == stream }
+                } else {
+                    appState.selectedStreams.append(stream)
+                }
             }
             return .handled
         }
@@ -149,6 +166,7 @@ struct ContentView: View {
             FlowLayout(spacing: 8) {
                 ForEach(Array(appState.availableStreams.enumerated()), id: \.element.id) { index, stream in
                     let isSelected = appState.selectedStreams.contains(stream)
+                    let displayName = stream.name.replacingOccurrences(of: "_", with: " ")
                     Button {
                         withAnimation(.smooth(duration: 0.2)) {
                             if isSelected {
@@ -157,7 +175,7 @@ struct ContentView: View {
                                 appState.selectedStreams.append(stream)
                             }
                         }
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        haptic.impactOccurred()
                         keepUIVisible()
                     } label: {
                         HStack(spacing: 6) {
@@ -167,12 +185,13 @@ struct ContentView: View {
                                 .shadow(color: isSelected ? .green.opacity(0.4) : .clear, radius: isSelected ? 3 : 0)
                                 .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.6), value: isSelected)
 
-                            Text(stream.name.replacingOccurrences(of: "_", with: " "))
+                            Text(displayName)
                                 .font(.caption.weight(isSelected ? .semibold : .medium))
                                 .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
+                        .frame(minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(isSelected ? .white.opacity(0.2) : .clear)
@@ -181,7 +200,11 @@ struct ContentView: View {
                                         .stroke(isSelected ? .clear : .white.opacity(0.1), lineWidth: 0.5)
                                 )
                         )
+                        .contentShape(Rectangle())
                     }
+                    .accessibilityLabel(displayName)
+                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                     .scaleEffect(isSelected ? 1.0 : 0.97)
                     .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.7), value: isSelected)
                     .opacity(isSelected ? 1 : 0.5)
@@ -294,6 +317,7 @@ private struct ServerInputField: View {
                     .tint(.white)
                     .submitLabel(.go)
                     .onSubmit { connect() }
+                    .accessibilityLabel("Server URL")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -312,6 +336,7 @@ private struct ServerInputField: View {
                 }
                 .font(.caption2)
                 .transition(.opacity)
+                .accessibilityElement(children: .combine)
             }
 
             HStack(spacing: 8) {
@@ -328,6 +353,7 @@ private struct ServerInputField: View {
                 }
                 .liquidGlassToken()
                 .disabled(urlInput.trimmingCharacters(in: .whitespaces).isEmpty || testing)
+                .accessibilityLabel(testing ? "Testing connection" : "Test connection")
 
                 Button {
                     connect()
@@ -338,6 +364,7 @@ private struct ServerInputField: View {
                 }
                 .liquidGlassToken()
                 .disabled(urlInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityLabel("Connect to server")
             }
         }
         .onAppear {
@@ -398,34 +425,51 @@ struct FlowLayout: Layout {
         let result = layout(proposal: proposal, subviews: subviews)
         let maxWidth = proposal.width ?? bounds.width
         for (index, position) in result.positions.enumerated() {
-            let rowOffset = result.rowOffsets[position.y] ?? 0
-            let centeredX = bounds.minX + position.x + (maxWidth - rowOffset) / 2
+            let row = result.rowIndices[index]
+            let rowWidth = result.rowWidths[row]
+            let centeredX = bounds.minX + position.x + (maxWidth - rowWidth) / 2
             subviews[index].place(at: CGPoint(x: centeredX, y: bounds.minY + position.y), proposal: .unspecified)
         }
     }
 
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint], rowOffsets: [CGFloat: CGFloat]) {
+    private struct LayoutResult {
+        var size: CGSize
+        var positions: [CGPoint]
+        var rowIndices: [Int]
+        var rowWidths: [CGFloat]
+    }
+
+    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> LayoutResult {
         let maxWidth = proposal.width ?? .infinity
         var positions: [CGPoint] = []
+        var rowIndices: [Int] = []
+        var rowWidths: [CGFloat] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
-        var rowWidths: [CGFloat: CGFloat] = [:]
+        var currentRow = 0
 
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
             if x + size.width > maxWidth && x > 0 {
-                rowWidths[y] = x - spacing
+                rowWidths.append(x - spacing)
                 x = 0
                 y += rowHeight + spacing
                 rowHeight = 0
+                currentRow += 1
             }
             positions.append(CGPoint(x: x, y: y))
+            rowIndices.append(currentRow)
             rowHeight = max(rowHeight, size.height)
             x += size.width + spacing
         }
-        rowWidths[y] = x - spacing
+        rowWidths.append(x - spacing)
 
-        return (CGSize(width: maxWidth, height: y + rowHeight), positions, rowWidths)
+        return LayoutResult(
+            size: CGSize(width: maxWidth, height: y + rowHeight),
+            positions: positions,
+            rowIndices: rowIndices,
+            rowWidths: rowWidths
+        )
     }
 }

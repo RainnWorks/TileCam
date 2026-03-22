@@ -37,6 +37,8 @@ struct StreamTileView: View {
     @State private var showRecoveryFlash = false
     @State private var wasDisconnected = false
 
+    private let zoomHaptic = UIImpactFeedbackGenerator(style: .medium)
+
     init(stream: Stream, service: Go2RTCService) {
         self.stream = stream
         self.service = service
@@ -118,10 +120,7 @@ struct StreamTileView: View {
                             .padding(.vertical, 4)
                             .background(.black.opacity(0.4), in: Capsule())
 
-                        Circle()
-                            .fill(stateColor)
-                            .frame(width: 6, height: 6)
-                            .shadow(color: stateColor == .green ? .green.opacity(0.6) : .clear, radius: 4)
+                        stateIcon
                             .animation(.smooth(duration: 0.5), value: client.connectionState)
 
                         if client.isRetrying {
@@ -161,9 +160,13 @@ struct StreamTileView: View {
                     .padding(6)
                 }
                 .transition(.opacity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(stream.name.replacingOccurrences(of: "_", with: " ")), \(stateLabel)")
             }
         }
         .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Stream: \(stream.name.replacingOccurrences(of: "_", with: " "))")
         .animation(.smooth(duration: 0.4), value: client.videoTrack != nil)
         .onChange(of: client.connectionState) { _, newState in
             if newState == .failed || newState == .disconnected {
@@ -242,7 +245,7 @@ struct StreamTileView: View {
                     newTransform = .identity
                 }
 
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                zoomHaptic.impactOccurred()
                 withAnimation(.smooth(duration: 0.25)) {
                     transform = newTransform
                     lastTransform = newTransform
@@ -313,6 +316,44 @@ struct StreamTileView: View {
         }
     }
 
+    private var stateLabel: String {
+        switch client.connectionState {
+        case .connected, .completed: "Connected"
+        case .checking, .new: "Connecting"
+        case .failed: "Connection failed"
+        case .disconnected: "Disconnected"
+        case .closed: "Stream ended"
+        default: "Unknown"
+        }
+    }
+
+    @ViewBuilder
+    private var stateIcon: some View {
+        switch client.connectionState {
+        case .connected, .completed:
+            Circle()
+                .fill(.green)
+                .frame(width: 6, height: 6)
+                .shadow(color: .green.opacity(0.6), radius: 4)
+        case .checking, .new:
+            Image(systemName: "circle.dotted")
+                .font(.system(size: 8))
+                .foregroundStyle(.yellow)
+        case .failed:
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(.red)
+        case .disconnected:
+            Image(systemName: "minus.circle.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(.orange)
+        default:
+            Circle()
+                .fill(.secondary)
+                .frame(width: 6, height: 6)
+        }
+    }
+
     private var connectingOverlay: some View {
         ProgressView()
             .tint(.white.opacity(0.6))
@@ -334,6 +375,7 @@ struct StreamTileView: View {
                         .foregroundStyle(.white)
                 }
                 .liquidGlassCircle()
+                .accessibilityLabel("Retry connection")
             }
         }
     }

@@ -11,7 +11,7 @@ struct TileGridView: View {
                 // Empty state — context-aware
                 VStack(spacing: 12) {
                     if !appState.isConnected && !appState.serverURL.isEmpty {
-                        // Connected to a server but it failed
+                        // Server unreachable
                         Image(systemName: "wifi.exclamationmark")
                             .font(.system(size: 36))
                             .foregroundStyle(.red)
@@ -24,6 +24,20 @@ struct TileGridView: View {
                         Text(appState.serverURL)
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.2))
+
+                        Button {
+                            Task { await appState.refreshStreams() }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Retry")
+                            }
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .liquidGlassToken()
+                        .padding(.top, 4)
+                        .accessibilityLabel("Retry server connection")
                     } else if appState.availableStreams.isEmpty {
                         // Connected but no streams available
                         Image(systemName: "video.slash")
@@ -49,6 +63,7 @@ struct TileGridView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .combine)
             } else if let service = appState.go2rtcService {
                 let layout = tileLayout(count: streams.count, size: geo.size)
 

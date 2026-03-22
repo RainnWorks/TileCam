@@ -11,11 +11,11 @@ struct StreamViewState: Codable, Equatable {
     var zoom: Double = 1.0
     var panX: Double = 0.0
     var panY: Double = 0.0
-    var contentMode: String = "contain"
 }
 
 // MARK: - Persisted layout store
 
+@MainActor
 final class LayoutStore {
     private static let selectedKey = "selectedStreamNames"
     private static let viewStatesKey = "streamViewStates"

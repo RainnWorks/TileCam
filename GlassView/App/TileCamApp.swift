@@ -25,21 +25,37 @@ struct TileCamApp: App {
 
 @MainActor
 final class AppState: ObservableObject {
-    @AppStorage("serverURL") var serverURL: String = ""
     @Published var availableStreams: [Stream] = []
     @Published var isConnected = false
+    @Published private(set) var go2rtcService: Go2RTCService?
+
+    var serverURL: String {
+        get { UserDefaults.standard.string(forKey: "serverURL") ?? "" }
+        set {
+            let old = serverURL
+            UserDefaults.standard.set(newValue, forKey: "serverURL")
+            objectWillChange.send()
+            if newValue != old {
+                updateService()
+            }
+        }
+    }
 
     @Published var selectedStreams: [Stream] {
         didSet { LayoutStore.saveSelectedStreams(selectedStreams) }
     }
 
-    var go2rtcService: Go2RTCService? {
-        guard let url = URL(string: serverURL), !serverURL.isEmpty else { return nil }
-        return Go2RTCService(baseURL: url)
-    }
-
     init() {
         self.selectedStreams = LayoutStore.loadSelectedStreams()
+        updateService()
+    }
+
+    private func updateService() {
+        guard !serverURL.isEmpty, let url = URL(string: serverURL) else {
+            go2rtcService = nil
+            return
+        }
+        go2rtcService = Go2RTCService(baseURL: url)
     }
 
     private var refreshTask: Task<Void, Never>?
