@@ -12,6 +12,10 @@ private struct ToggleUIKey: EnvironmentKey {
     static let defaultValue: () -> Void = {}
 }
 
+private struct RootSafeAreaKey: EnvironmentKey {
+    static let defaultValue: EdgeInsets = EdgeInsets()
+}
+
 extension EnvironmentValues {
     var showUI: Bool {
         get { self[ShowUIKey.self] }
@@ -21,6 +25,10 @@ extension EnvironmentValues {
         get { self[ToggleUIKey.self] }
         set { self[ToggleUIKey.self] = newValue }
     }
+    var rootSafeArea: EdgeInsets {
+        get { self[RootSafeAreaKey.self] }
+        set { self[RootSafeAreaKey.self] = newValue }
+    }
 }
 
 struct StreamTileView: View {
@@ -29,6 +37,7 @@ struct StreamTileView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.showUI) private var showUI
     @Environment(\.toggleUI) private var toggleUI
+    @Environment(\.rootSafeArea) private var rootSafeArea
     @StateObject private var client: WebRTCClient
 
     @State private var transform: CGAffineTransform
@@ -163,16 +172,13 @@ struct StreamTileView: View {
     @ViewBuilder
     private var audioIndicator: some View {
         if client.audioTrack != nil {
-            GeometryReader { geo in
-                let insets = geo.safeAreaInsets
-                AudioWaveformIndicator(
-                    level: client.audioLevel,
-                    isMuted: !appState.isStreamAudioEnabled(stream.name)
-                )
-                .padding(.top, max(8, insets.top + 4))
-                .padding(.leading, max(8, insets.leading + 4))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
+            AudioWaveformIndicator(
+                level: client.audioLevel,
+                isMuted: !appState.isStreamAudioEnabled(stream.name)
+            )
+            .padding(.top, max(8, rootSafeArea.top + 4))
+            .padding(.leading, max(8, rootSafeArea.leading + 4))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .allowsHitTesting(false)
         }
     }
