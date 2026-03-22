@@ -102,14 +102,26 @@ final class PhoneSessionManager: NSObject, ObservableObject {
 
     func updateAvailableStreams(_ streams: [String]) {
         guard let session, session.activationState == .activated else { return }
+        let behavior = UserDefaults.standard.string(forKey: "wristBehavior") ?? "eco"
         do {
             try session.updateApplicationContext([
                 "streams": streams,
-                "timestamp": Date().timeIntervalSince1970
+                "timestamp": Date().timeIntervalSince1970,
+                "wristBehavior": behavior
             ])
         } catch {
             log.error("Failed to update application context: \(error)")
         }
+    }
+
+    /// Syncs the wrist-down behavior setting to the Watch via a direct message.
+    func syncWristBehavior(_ behavior: String) {
+        guard let session, session.isReachable else { return }
+        session.sendMessage(
+            ["action": "wristBehavior", "value": behavior],
+            replyHandler: nil,
+            errorHandler: { error in log.error("wristBehavior sync failed: \(error)") }
+        )
     }
 
     /// One-shot: send a camera + current viewport to the Watch.

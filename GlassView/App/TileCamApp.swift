@@ -47,6 +47,19 @@ final class AppState: ObservableObject {
         didSet { LayoutStore.saveSelectedStreams(selectedStreams) }
     }
 
+    // MARK: - Watch wrist-down behavior
+
+    /// Controls what happens when the user lowers their wrist while streaming to the Watch.
+    /// "eco" = stop everything, "audioOnly" = keep audio playing, "alwaysOn" = keep both streams.
+    var wristBehavior: String {
+        get { UserDefaults.standard.string(forKey: "wristBehavior") ?? "eco" }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "wristBehavior")
+            objectWillChange.send()
+            PhoneSessionManager.shared.syncWristBehavior(newValue)
+        }
+    }
+
     // MARK: - Audio state
 
     var isGlobalAudioEnabled: Bool {
@@ -80,6 +93,8 @@ final class AppState: ObservableObject {
     init() {
         self.selectedStreams = LayoutStore.loadSelectedStreams()
         updateService()
+        // Sync wrist behavior to Watch on launch
+        PhoneSessionManager.shared.syncWristBehavior(wristBehavior)
     }
 
     private func updateService() {

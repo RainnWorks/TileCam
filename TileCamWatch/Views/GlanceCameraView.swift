@@ -324,7 +324,18 @@ struct GlanceCameraView: View {
 
     private func startGlance() {
         guard session.isPhoneReachable, let camera = resolvedCameraName else { return }
-        guard session.subscribedStream != camera else { return }
+
+        // If already subscribed to this camera (e.g. wrist-raise after audio-only or always-on),
+        // just restore the user's preferred mode instead of re-subscribing from scratch.
+        if session.subscribedStream == camera {
+            if session.currentMode != selectedMode {
+                session.changeMode(selectedMode)
+            }
+            resetTimeout()
+            resetStalenessTimer()
+            return
+        }
+
         session.subscribe(to: camera, mode: selectedMode)
         resetTimeout()
         resetStalenessTimer()
@@ -334,7 +345,19 @@ struct GlanceCameraView: View {
         timeoutTask?.cancel()
         stalenessTimer?.cancel()
         controlsHideTask?.cancel()
-        session.unsubscribe()
+
+        // Respect wrist-down behavior setting
+        if settings.keepAudioOnWristDown && !settings.keepVideoOnWristDown {
+            // Audio-only: switch to audio mode, keep streaming
+            if session.currentMode != .audioOnly {
+                session.changeMode(.audioOnly)
+            }
+        } else if settings.keepVideoOnWristDown {
+            // Always-on: keep everything running (skip unsubscribe)
+        } else {
+            // Eco: stop everything
+            session.unsubscribe()
+        }
     }
 
     private func resetTimeout() {

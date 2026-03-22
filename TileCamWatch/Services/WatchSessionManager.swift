@@ -238,9 +238,12 @@ extension WatchSessionManager: WCSessionDelegate {
         _ session: WCSession,
         didReceiveApplicationContext applicationContext: [String: Any]
     ) {
-        if let streams = applicationContext["streams"] as? [String] {
-            Task { @MainActor in
+        Task { @MainActor in
+            if let streams = applicationContext["streams"] as? [String] {
                 self.availableStreams = streams
+            }
+            if let behavior = applicationContext["wristBehavior"] as? String {
+                WatchSettings.shared.wristBehavior = behavior
             }
         }
     }
@@ -284,6 +287,11 @@ extension WatchSessionManager: WCSessionDelegate {
             case "streamResumed":
                 self.isStreamPaused = false
                 log.info("iPhone stream resumed")
+            case "wristBehavior":
+                if let value = message["value"] as? String {
+                    WatchSettings.shared.wristBehavior = value
+                    log.info("Wrist behavior updated: \(value)")
+                }
             default:
                 break
             }

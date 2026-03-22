@@ -17,6 +17,20 @@ final class WatchSettings: ObservableObject {
     /// Default stream mode for new sessions.
     @AppStorage("defaultStreamMode") var defaultStreamMode: String = StreamMode.videoAndAudio.rawValue
 
+    /// Wrist-down behavior: "eco" (stop all), "audioOnly" (keep audio), "alwaysOn" (keep both).
+    /// Synced from the iPhone app.
+    @AppStorage("wristBehavior") var wristBehavior: String = "eco"
+
+    /// Whether to keep audio playing when wrist is lowered.
+    var keepAudioOnWristDown: Bool {
+        wristBehavior == "audioOnly" || wristBehavior == "alwaysOn"
+    }
+
+    /// Whether to keep video streaming when wrist is lowered.
+    var keepVideoOnWristDown: Bool {
+        wristBehavior == "alwaysOn"
+    }
+
     var resolvedMode: StreamMode {
         StreamMode(rawValue: defaultStreamMode) ?? .videoAndAudio
     }

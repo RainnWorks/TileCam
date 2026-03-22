@@ -21,6 +21,8 @@
 		EB3B869F306C26E7B089F010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 806189DE7D7D0CC0C2D22C44 /* Assets.xcassets */; };
 		FB3F1D92557C85D8E6EDE46C /* PlaybackOnlyAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88C1D43F8945033048962AA2 /* PlaybackOnlyAudioDevice.swift */; };
 		397DC29CA9EA7D2B15693474 /* AudioWaveformIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8280F6FC397DC29CA9EA7D2B /* AudioWaveformIndicator.swift */; };
+		E6A93D7084C9F53EA1B6D2F4 /* WatchSettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D60C5F71B8E42D9E05A6C3 /* WatchSettingsPanel.swift */; };
+		D5F82B4C93EA061B7F24C8E5 /* WristBehaviorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E71A3B82D9F50A6E13B7D4 /* WristBehaviorPicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +39,8 @@
 		928228BAF971EAB0F94F933E /* WebRTCFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCFactory.swift; sourceTree = "<group>"; };
 		A0B282F715B55C71ED245E57 /* TileCam.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TileCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A44A831E492B794DB9C5D785 /* TileCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCamApp.swift; sourceTree = "<group>"; };
+		A3D60C5F71B8E42D9E05A6C3 /* WatchSettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsPanel.swift; sourceTree = "<group>"; };
+		C4E71A3B82D9F50A6E13B7D4 /* WristBehaviorPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WristBehaviorPicker.swift; sourceTree = "<group>"; };
 		B00516D3FD64CB4FF244CCC0 /* StreamTileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTileView.swift; sourceTree = "<group>"; };
 		D6358E02DEFB2C1BD5298AC1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -70,6 +74,8 @@
 			children = (
 				8280F6FC397DC29CA9EA7D2B /* AudioWaveformIndicator.swift */,
 				1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */,
+				A3D60C5F71B8E42D9E05A6C3 /* WatchSettingsPanel.swift */,
+				C4E71A3B82D9F50A6E13B7D4 /* WristBehaviorPicker.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -216,8 +222,10 @@
 				DDFE2B8B57070194796AC490 /* StreamTileView.swift in Sources */,
 				B094BA7E64F438D9546A504A /* TileCamApp.swift in Sources */,
 				DF0314DFC40FF78972474BDA /* TileGridView.swift in Sources */,
+				E6A93D7084C9F53EA1B6D2F4 /* WatchSettingsPanel.swift in Sources */,
 				9461A979875765025A4239AB /* WebRTCClient.swift in Sources */,
 				7787C69321A1ECAD8393E47F /* WebRTCFactory.swift in Sources */,
+				D5F82B4C93EA061B7F24C8E5 /* WristBehaviorPicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -121,10 +121,18 @@ struct CameraSnapshotView: View {
             centerX = initialCenterX
             centerY = initialCenterY
             dragStart = CGSize(width: centerX, height: centerY)
-            session.subscribe(
-                to: activeStreamName, mode: selectedMode,
-                zoom: zoom, centerX: centerX, centerY: centerY
-            )
+
+            // If already subscribed (wrist-raise after audio-only/always-on), restore mode
+            if session.subscribedStream == activeStreamName {
+                if session.currentMode != selectedMode {
+                    session.changeMode(selectedMode)
+                }
+            } else {
+                session.subscribe(
+                    to: activeStreamName, mode: selectedMode,
+                    zoom: zoom, centerX: centerX, centerY: centerY
+                )
+            }
             resetTimeout()
             resetStalenessTimer()
             scheduleAutoHide()
@@ -134,7 +142,17 @@ struct CameraSnapshotView: View {
             timeoutTask?.cancel()
             stalenessTimer?.cancel()
             controlsHideTask?.cancel()
-            session.unsubscribe()
+
+            // Respect wrist-down behavior setting
+            if settings.keepAudioOnWristDown && !settings.keepVideoOnWristDown {
+                if session.currentMode != .audioOnly {
+                    session.changeMode(.audioOnly)
+                }
+            } else if settings.keepVideoOnWristDown {
+                // Keep everything running
+            } else {
+                session.unsubscribe()
+            }
         }
     }
 
