@@ -8,14 +8,45 @@ struct TileGridView: View {
             let streams = appState.selectedStreams.uniqued()
 
             if streams.isEmpty {
-                // Empty state — nudge user to select streams
+                // Empty state — context-aware
                 VStack(spacing: 12) {
-                    Image(systemName: "video.badge.plus")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.white.opacity(0.2))
-                    Text("Tap a stream below to start")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.3))
+                    if !appState.isConnected && !appState.serverURL.isEmpty {
+                        // Connected to a server but it failed
+                        Image(systemName: "wifi.exclamationmark")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.red)
+                            .phaseAnimator([false, true]) { content, phase in
+                                content.opacity(phase ? 0.45 : 0.3)
+                            } animation: { _ in .easeInOut(duration: 2.0) }
+                        Text("Cannot reach server")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.4))
+                        Text(appState.serverURL)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.2))
+                    } else if appState.availableStreams.isEmpty {
+                        // Connected but no streams available
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.white)
+                            .phaseAnimator([false, true]) { content, phase in
+                                content.opacity(phase ? 0.25 : 0.15)
+                            } animation: { _ in .easeInOut(duration: 3.0) }
+                        Text("No streams available")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.3))
+                    } else {
+                        // Streams available, none selected
+                        Image(systemName: "hand.tap")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.white)
+                            .phaseAnimator([false, true]) { content, phase in
+                                content.opacity(phase ? 0.25 : 0.15)
+                            } animation: { _ in .easeInOut(duration: 3.0) }
+                        Text("Select a stream below")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let service = appState.go2rtcService {

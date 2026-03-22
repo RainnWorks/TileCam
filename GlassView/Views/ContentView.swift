@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var showUI = true
     @State private var showServerInput = false
     @State private var hideTimer: Task<Void, Never>?
+    @State private var animateTokens = false
 
     private let autoHideDelay: Duration = .seconds(4)
 
@@ -26,14 +27,15 @@ struct ContentView: View {
                 // All UI fades in/out together
                 if showUI {
                     VStack {
-                        // Top: settings button
+                        // Top: server button
                         HStack {
                             Spacer()
+
                             Button {
                                 withAnimation { showServerInput.toggle() }
                                 keepUIVisible()
                             } label: {
-                                Image(systemName: "gearshape.fill")
+                                Image(systemName: "server.rack")
                                     .font(.body)
                                     .foregroundStyle(.white)
                             }
@@ -125,33 +127,19 @@ struct ContentView: View {
     // MARK: - Server Input
 
     private var serverInputPanel: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "video.doorbell.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.7))
-
-            Text("TileCam")
-                .font(.title.weight(.semibold))
-                .foregroundStyle(.white)
-
-            ServerInputField(
-                initialURL: appState.serverURL,
-                onConnect: { url in
-                    let serverChanged = url != appState.serverURL
-                    appState.serverURL = url
-                    if serverChanged {
-                        appState.selectedStreams = []
-                        appState.availableStreams = []
-                    }
-                    withAnimation { showServerInput = false }
-                    Task { await appState.refreshStreams() }
+        ServerInputPanel(
+            serverURL: appState.serverURL,
+            onConnect: { url in
+                let serverChanged = url != appState.serverURL
+                appState.serverURL = url
+                if serverChanged {
+                    appState.selectedStreams = []
+                    appState.availableStreams = []
                 }
-            )
-        }
-        .padding(28)
-        .contentShape(Rectangle())
-        .glassBackground(cornerRadius: 24)
-        .padding(.horizontal, 32)
+                withAnimation { showServerInput = false }
+                Task { await appState.refreshStreams() }
+            }
+        )
     }
 
     // MARK: - Stream Token Panel
@@ -159,7 +147,7 @@ struct ContentView: View {
     private var streamTokenPanel: some View {
         VStack(spacing: 0) {
             FlowLayout(spacing: 8) {
-                ForEach(appState.availableStreams) { stream in
+                ForEach(Array(appState.availableStreams.enumerated()), id: \.element.id) { index, stream in
                     let isSelected = appState.selectedStreams.contains(stream)
                     Button {
                         withAnimation(.smooth(duration: 0.2)) {
@@ -169,25 +157,37 @@ struct ContentView: View {
                                 appState.selectedStreams.append(stream)
                             }
                         }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         keepUIVisible()
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             Circle()
-                                .fill(isSelected ? .green : .white.opacity(0.3))
-                                .frame(width: 6, height: 6)
+                                .fill(isSelected ? .green : .white.opacity(0.2))
+                                .frame(width: isSelected ? 8 : 6, height: isSelected ? 8 : 6)
+                                .shadow(color: isSelected ? .green.opacity(0.4) : .clear, radius: isSelected ? 3 : 0)
+                                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.6), value: isSelected)
 
                             Text(stream.name.replacingOccurrences(of: "_", with: " "))
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
+                                .font(.caption.weight(isSelected ? .semibold : .medium))
+                                .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(isSelected ? .white.opacity(0.1) : .clear)
+                                .fill(isSelected ? .white.opacity(0.2) : .clear)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(isSelected ? .clear : .white.opacity(0.1), lineWidth: 0.5)
+                                )
                         )
                     }
-                    .opacity(isSelected ? 1 : 0.7)
+                    .scaleEffect(isSelected ? 1.0 : 0.97)
+                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                    .opacity(isSelected ? 1 : 0.5)
+                    .opacity(animateTokens ? 1 : 0)
+                    .offset(y: animateTokens ? 0 : 4)
+                    .animation(.smooth(duration: 0.25).delay(Double(index) * 0.04), value: animateTokens)
                 }
             }
             .padding(12)
@@ -196,6 +196,68 @@ struct ContentView: View {
         .glassBackground(cornerRadius: 20)
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
+        .onChange(of: appState.availableStreams) { old, new in
+            if old.isEmpty && !new.isEmpty {
+                animateTokens = false
+                withAnimation { animateTokens = true }
+            }
+        }
+        .onAppear {
+            if !appState.availableStreams.isEmpty {
+                animateTokens = true
+            }
+        }
+    }
+}
+
+// MARK: - Server Input Panel (staggered entrance)
+
+private struct ServerInputPanel: View {
+    let serverURL: String
+    let onConnect: (String) -> Void
+    @State private var visible = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 12) {
+                Image("TileCamLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 64, height: 64)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .opacity(visible ? 1 : 0)
+                    .scaleEffect(visible ? 1 : 0.9)
+                    .animation(.smooth(duration: 0.35), value: visible)
+
+                Text("TileCam")
+                    .font(.title.weight(.bold))
+                    .tracking(1)
+                    .foregroundStyle(.white)
+                    .opacity(visible ? 1 : 0)
+                    .offset(y: visible ? 0 : 4)
+                    .animation(.smooth(duration: 0.3).delay(0.06), value: visible)
+
+                Text("Multi-camera streaming")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.4))
+                    .opacity(visible ? 1 : 0)
+                    .animation(.smooth(duration: 0.3).delay(0.12), value: visible)
+            }
+
+            ServerInputField(
+                initialURL: serverURL,
+                onConnect: onConnect
+            )
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 6)
+            .animation(.smooth(duration: 0.3).delay(0.15), value: visible)
+        }
+        .padding(32)
+        .frame(maxWidth: 400)
+        .contentShape(Rectangle())
+        .glassBackground(cornerRadius: 24)
+        .padding(.horizontal, 32)
+        .onAppear { visible = true }
     }
 }
 
@@ -334,22 +396,26 @@ struct FlowLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = layout(proposal: proposal, subviews: subviews)
+        let maxWidth = proposal.width ?? bounds.width
         for (index, position) in result.positions.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+            let rowOffset = result.rowOffsets[position.y] ?? 0
+            let centeredX = bounds.minX + position.x + (maxWidth - rowOffset) / 2
+            subviews[index].place(at: CGPoint(x: centeredX, y: bounds.minY + position.y), proposal: .unspecified)
         }
     }
 
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
+    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint], rowOffsets: [CGFloat: CGFloat]) {
         let maxWidth = proposal.width ?? .infinity
         var positions: [CGPoint] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
-        var maxX: CGFloat = 0
+        var rowWidths: [CGFloat: CGFloat] = [:]
 
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
             if x + size.width > maxWidth && x > 0 {
+                rowWidths[y] = x - spacing
                 x = 0
                 y += rowHeight + spacing
                 rowHeight = 0
@@ -357,9 +423,9 @@ struct FlowLayout: Layout {
             positions.append(CGPoint(x: x, y: y))
             rowHeight = max(rowHeight, size.height)
             x += size.width + spacing
-            maxX = max(maxX, x)
         }
+        rowWidths[y] = x - spacing
 
-        return (CGSize(width: maxX, height: y + rowHeight), positions)
+        return (CGSize(width: maxWidth, height: y + rowHeight), positions, rowWidths)
     }
 }

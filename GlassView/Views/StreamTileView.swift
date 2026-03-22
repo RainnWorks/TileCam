@@ -34,6 +34,8 @@ struct StreamTileView: View {
     @State private var transform: CGAffineTransform
     @State private var lastTransform: CGAffineTransform
     @State private var contentSize: CGSize = .zero
+    @State private var showRecoveryFlash = false
+    @State private var wasDisconnected = false
 
     init(stream: Stream, service: Go2RTCService) {
         self.stream = stream
@@ -74,6 +76,12 @@ struct StreamTileView: View {
                         SimultaneousGesture(magnifyGesture, dragGesture)
                     )
                     .gesture(doubleTapGesture)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 1.02)),
+                            removal: .opacity
+                        )
+                    )
             }
 
             // Status overlays
@@ -83,14 +91,20 @@ struct StreamTileView: View {
             case .failed:
                 failedOverlay
             case .disconnected:
-                statusCenter(icon: "wifi.slash", label: "Lost", color: .orange)
+                statusCenter(icon: "wifi.slash", label: "Disconnected", color: .orange)
             case .new, .checking:
                 connectingOverlay
+                    .transition(.opacity)
             case .closed:
-                statusCenter(icon: "xmark.circle", label: "Closed", color: .secondary)
+                statusCenter(icon: "xmark.circle", label: "Stream ended", color: .secondary)
             @unknown default:
                 EmptyView()
             }
+
+            // Recovery flash border
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(Color.green.opacity(showRecoveryFlash ? 0.5 : 0), lineWidth: 1.5)
+                .animation(.smooth(duration: 0.6), value: showRecoveryFlash)
 
             // Bottom bar
             if showUI {
@@ -107,6 +121,8 @@ struct StreamTileView: View {
                         Circle()
                             .fill(stateColor)
                             .frame(width: 6, height: 6)
+                            .shadow(color: stateColor == .green ? .green.opacity(0.6) : .clear, radius: 4)
+                            .animation(.smooth(duration: 0.5), value: client.connectionState)
 
                         if client.isRetrying {
                             HStack(spacing: 3) {
@@ -125,12 +141,21 @@ struct StreamTileView: View {
                         Spacer()
 
                         if transform.scaleX > 1.01 {
-                            Text("\(transform.scaleX, specifier: "%.1f")x")
+                            let zoomText = String(format: "%.1fx", transform.scaleX)
+                            Text(zoomText)
                                 .font(.system(size: 9).monospaced())
                                 .foregroundStyle(.white.opacity(0.5))
+                                .contentTransition(.numericText())
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 3)
                                 .background(.black.opacity(0.4), in: Capsule())
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                        removal: .scale(scale: 1.1).combined(with: .opacity)
+                                    )
+                                )
+                                .animation(.smooth(duration: 0.2), value: zoomText)
                         }
                     }
                     .padding(6)
@@ -139,6 +164,19 @@ struct StreamTileView: View {
             }
         }
         .clipped()
+        .animation(.smooth(duration: 0.4), value: client.videoTrack != nil)
+        .onChange(of: client.connectionState) { _, newState in
+            if newState == .failed || newState == .disconnected {
+                wasDisconnected = true
+            } else if (newState == .connected || newState == .completed) && wasDisconnected {
+                wasDisconnected = false
+                showRecoveryFlash = true
+                Task {
+                    try? await Task.sleep(for: .milliseconds(800))
+                    withAnimation { showRecoveryFlash = false }
+                }
+            }
+        }
         .task {
             await client.connect()
         }
@@ -185,16 +223,27 @@ struct StreamTileView: View {
     private var doubleTapGesture: some Gesture {
         SpatialTapGesture(count: 2)
             .onEnded { value in
+                let currentScale = transform.scaleX
                 let newTransform: CGAffineTransform
-                if transform.isIdentity {
-                    let anchor = value.location
+                let anchor = value.location
+
+                if currentScale < 1.5 {
+                    // 1x → 2x
                     newTransform = CGAffineTransform(translationX: anchor.x, y: anchor.y)
-                        .scaledBy(x: 3, y: 3)
+                        .scaledBy(x: 2, y: 2)
+                        .translatedBy(x: -anchor.x, y: -anchor.y)
+                } else if currentScale < 3.0 {
+                    // 2x → 4x
+                    newTransform = CGAffineTransform(translationX: anchor.x, y: anchor.y)
+                        .scaledBy(x: 4, y: 4)
                         .translatedBy(x: -anchor.x, y: -anchor.y)
                 } else {
+                    // 4x+ → reset
                     newTransform = .identity
                 }
-                withAnimation(.linear(duration: 0.15)) {
+
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                withAnimation(.smooth(duration: 0.25)) {
                     transform = newTransform
                     lastTransform = newTransform
                 }
