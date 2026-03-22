@@ -4,11 +4,14 @@ struct CameraSnapshotView: View {
     let streamName: String
     @EnvironmentObject var session: WatchSessionManager
 
+    /// Local viewport state — mirrors iPhone, can be overridden by Watch gestures.
     @State private var zoom: CGFloat = 1.0
-    @State private var panCenter: CGSize = .zero // normalized offset from center (-0.5...0.5)
-    @State private var lastPanCenter: CGSize = .zero
+    @State private var centerX: CGFloat = 0.5
+    @State private var centerY: CGFloat = 0.5
+    @State private var dragStart: CGSize = .zero
     @State private var selectedMode: StreamMode = .videoAndAudio
     @State private var viewportDebounce: Task<Void, Never>?
+    @State private var suppressSync = false
 
     private let maxZoom: CGFloat = 6.0
     private let minZoom: CGFloat = 1.0
@@ -37,11 +40,15 @@ struct CameraSnapshotView: View {
         )
         .onChange(of: zoom) { _, newZoom in
             if newZoom <= 1.01 {
-                panCenter = .zero
-                lastPanCenter = .zero
+                centerX = 0.5
+                centerY = 0.5
             }
-            sendViewportUpdate()
+            sendViewportToiPhone()
         }
+        // Receive viewport syncs from iPhone
+        .onChange(of: session.syncedZoom) { _, _ in applyiPhoneViewport() }
+        .onChange(of: session.syncedCenterX) { _, _ in applyiPhoneViewport() }
+        .onChange(of: session.syncedCenterY) { _, _ in applyiPhoneViewport() }
         .toolbar {
             ToolbarItem(placement: .bottomBar) {
                 HStack(spacing: 8) {
@@ -55,6 +62,10 @@ struct CameraSnapshotView: View {
             }
         }
         .onAppear {
+            // Start with iPhone's current viewport
+            zoom = max(session.syncedZoom, 1.0)
+            centerX = session.syncedCenterX
+            centerY = session.syncedCenterY
             session.subscribe(to: streamName, mode: selectedMode)
         }
         .onDisappear {
@@ -68,7 +79,7 @@ struct CameraSnapshotView: View {
     @ViewBuilder
     private func videoContent(in size: CGSize) -> some View {
         if let image = session.latestSnapshot {
-            // Image is displayed 1:1 — iPhone sends pre-cropped frames
+            // Frames are pre-cropped by iPhone — display 1:1
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
@@ -139,39 +150,44 @@ struct CameraSnapshotView: View {
         DragGesture()
             .onChanged { value in
                 guard zoom > 1.0 else { return }
-                // Convert screen-space drag to normalized pan offset
-                // Dragging right reveals content to the left, so negate
+                // Convert screen-space drag to normalized viewport shift
                 let dx = -value.translation.width / (size.width * zoom)
                 let dy = -value.translation.height / (size.height * zoom)
-                panCenter = CGSize(
-                    width: clampCenter(lastPanCenter.width + dx),
-                    height: clampCenter(lastPanCenter.height + dy)
-                )
-                sendViewportUpdate()
+                let maxOffset = max(0, (1.0 - 1.0 / zoom) / 2.0)
+                centerX = min(max(dragStart.width + dx, 0.5 - maxOffset), 0.5 + maxOffset)
+                centerY = min(max(dragStart.height + dy, 0.5 - maxOffset), 0.5 + maxOffset)
+                sendViewportToiPhone()
             }
             .onEnded { _ in
-                lastPanCenter = panCenter
+                dragStart = CGSize(width: centerX, height: centerY)
             }
     }
 
-    /// Clamp normalized pan offset so the crop stays within the image
-    private func clampCenter(_ value: CGFloat) -> CGFloat {
-        let maxOffset = max(0, (1.0 - 1.0 / zoom) / 2.0)
-        return min(max(value, -maxOffset), maxOffset)
-    }
+    // MARK: - Viewport Sync
 
-    // MARK: - Viewport
-
-    private func sendViewportUpdate() {
+    /// Send the Watch's current viewport to the iPhone for cropping.
+    private func sendViewportToiPhone() {
+        guard !suppressSync else { return }
         viewportDebounce?.cancel()
         viewportDebounce = Task {
-            try? await Task.sleep(for: .milliseconds(100))
+            try? await Task.sleep(for: .milliseconds(80))
             guard !Task.isCancelled else { return }
-            session.sendViewport(
-                zoom: zoom,
-                centerX: 0.5 + panCenter.width,
-                centerY: 0.5 + panCenter.height
-            )
+            session.sendViewport(zoom: zoom, centerX: centerX, centerY: centerY)
+        }
+    }
+
+    /// Apply a viewport update received from the iPhone.
+    private func applyiPhoneViewport() {
+        guard !suppressSync else { return }
+        suppressSync = true
+        zoom = max(session.syncedZoom, 1.0)
+        centerX = session.syncedCenterX
+        centerY = session.syncedCenterY
+        dragStart = CGSize(width: centerX, height: centerY)
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            suppressSync = false
         }
     }
 }

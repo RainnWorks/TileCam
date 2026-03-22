@@ -1,6 +1,7 @@
 import Foundation
 import WatchConnectivity
 import UIKit
+import Combine
 import os
 
 private let log = Logger(subsystem: "works.rainn.tilecam", category: "WatchSession")
@@ -18,13 +19,25 @@ enum WatchStreamMode: String {
     case audioOnly
 }
 
+/// Normalized viewport: zoom level + center position (0-1).
+struct ViewportUpdate {
+    let streamName: String
+    let zoom: CGFloat
+    let centerX: CGFloat
+    let centerY: CGFloat
+}
+
 /// Manages WatchConnectivity on the iPhone side.
 /// Streams JPEG snapshots and MP3 audio from go2rtc HTTP endpoints to the Watch.
+/// Supports bidirectional viewport sync — both iPhone and Watch can control zoom/pan.
 @MainActor
 final class PhoneSessionManager: NSObject, ObservableObject {
     static let shared = PhoneSessionManager()
 
     @Published var isWatchReachable = false
+
+    /// Publishes viewport changes originating from the Watch, so StreamTileView can apply them.
+    let remoteViewportPublisher = PassthroughSubject<ViewportUpdate, Never>()
 
     private var session: WCSession?
     private var go2rtcService: Go2RTCService?
@@ -34,7 +47,7 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     private var snapshotTask: Task<Void, Never>?
     private var audioTask: Task<Void, Never>?
 
-    /// Current viewport from Watch: zoom level and normalized center (0-1)
+    /// Current viewport used for cropping MJPEG frames.
     private var viewportZoom: CGFloat = 1.0
     private var viewportCenterX: CGFloat = 0.5
     private var viewportCenterY: CGFloat = 0.5
@@ -64,13 +77,33 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    /// Send a specific camera to the Watch (triggered from iPhone UI)
+    /// Send a specific camera to the Watch (triggered from iPhone UI).
     func sendCameraToWatch(streamName: String) {
         guard let session, session.isReachable else { return }
         session.sendMessage(
             ["action": "showCamera", "streamName": streamName],
             replyHandler: nil
         )
+    }
+
+    // MARK: - Viewport (from iPhone's StreamTileView)
+
+    /// Called by StreamTileView when the user zooms/pans on iPhone.
+    /// Updates the crop viewport AND forwards to the Watch.
+    func updateStreamViewport(streamName: String, zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
+        guard streamName == watchedStreamName else { return }
+        viewportZoom = zoom
+        viewportCenterX = centerX
+        viewportCenterY = centerY
+
+        // Forward to Watch so it knows the current viewport
+        guard let session, session.isReachable else { return }
+        session.sendMessage([
+            "action": "viewportSync",
+            "zoom": Double(zoom),
+            "centerX": Double(centerX),
+            "centerY": Double(centerY)
+        ], replyHandler: nil, errorHandler: nil)
     }
 
     // MARK: - Stream Management
@@ -84,6 +117,16 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         guard let service = go2rtcService else {
             log.error("No go2rtcService available for Watch streaming")
             return
+        }
+
+        // Send current viewport to Watch on subscribe
+        if let session, session.isReachable {
+            session.sendMessage([
+                "action": "viewportSync",
+                "zoom": Double(viewportZoom),
+                "centerX": Double(viewportCenterX),
+                "centerY": Double(viewportCenterY)
+            ], replyHandler: nil, errorHandler: nil)
         }
 
         if mode != .audioOnly {
@@ -114,8 +157,8 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                 let (bytes, _) = try await session.bytes(from: url)
 
                 var buffer = Data()
-                let jpegStart = Data([0xFF, 0xD8]) // JPEG SOI marker
-                let jpegEnd = Data([0xFF, 0xD9])   // JPEG EOI marker
+                let jpegStart = Data([0xFF, 0xD8])
+                let jpegEnd = Data([0xFF, 0xD9])
                 var inFrame = false
 
                 for try await byte in bytes {
@@ -123,16 +166,13 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                     buffer.append(byte)
 
                     if !inFrame {
-                        // Look for JPEG SOI marker
                         if buffer.count >= 2 && buffer.suffix(2) == jpegStart {
                             buffer = jpegStart
                             inFrame = true
                         } else if buffer.count > 256 {
-                            // Discard multipart headers
                             buffer.removeAll(keepingCapacity: true)
                         }
                     } else {
-                        // Look for JPEG EOI marker
                         if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
                             let frame = await self?.cropFrameToViewport(buffer) ?? buffer
                             await self?.sendTaggedData(tag: .videoFrame, payload: frame)
@@ -150,7 +190,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    /// Fallback: poll /api/frame.jpeg if MJPEG stream fails
     private func startSnapshotPolling(service: Go2RTCService, streamName: String) {
         snapshotTask = Task {
             while !Task.isCancelled {
@@ -170,16 +209,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
 
     // MARK: - Viewport Cropping
 
-    private func updateViewport(zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
-        viewportZoom = max(1.0, zoom)
-        viewportCenterX = min(max(centerX, 0), 1)
-        viewportCenterY = min(max(centerY, 0), 1)
-        log.info("Viewport updated: zoom=\(zoom) center=(\(centerX), \(centerY))")
-    }
-
-    /// Crops a JPEG frame to the current Watch viewport.
-    /// At zoom=1, returns the original frame unchanged.
-    /// At zoom=2, returns the center 50% crop at full pixel density.
     private func cropFrameToViewport(_ jpegData: Data) -> Data {
         guard viewportZoom > 1.01 else { return jpegData }
 
@@ -190,26 +219,18 @@ final class PhoneSessionManager: NSObject, ObservableObject {
 
         let imgW = CGFloat(cgImage.width)
         let imgH = CGFloat(cgImage.height)
-
-        // Crop dimensions based on zoom
         let cropW = imgW / viewportZoom
         let cropH = imgH / viewportZoom
-
-        // Center position in pixel coordinates
         let cropX = (viewportCenterX * imgW) - (cropW / 2)
         let cropY = (viewportCenterY * imgH) - (cropH / 2)
-
-        // Clamp to image bounds
         let clampedX = min(max(cropX, 0), imgW - cropW)
         let clampedY = min(max(cropY, 0), imgH - cropH)
-
         let cropRect = CGRect(x: clampedX, y: clampedY, width: cropW, height: cropH)
 
         guard let cropped = cgImage.cropping(to: cropRect) else {
             return jpegData
         }
 
-        // Re-encode as JPEG
         let uiImage = UIImage(cgImage: cropped)
         return uiImage.jpegData(compressionQuality: 0.6) ?? jpegData
     }
@@ -223,7 +244,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                 let (bytes, _) = try await streamSession.bytes(from: url)
 
                 var buffer = Data()
-                // ~4KB chunks ≈ 250ms of 128kbps MP3
                 let chunkSize = 4096
 
                 for try await byte in bytes {
@@ -314,10 +334,19 @@ extension PhoneSessionManager: WCSessionDelegate {
             case "unsubscribe":
                 self.unsubscribeFromStream()
             case "viewport":
+                // Watch-originated viewport change
                 let zoom = message["zoom"] as? Double ?? 1.0
                 let cx = message["centerX"] as? Double ?? 0.5
                 let cy = message["centerY"] as? Double ?? 0.5
-                self.updateViewport(zoom: zoom, centerX: cx, centerY: cy)
+                self.viewportZoom = zoom
+                self.viewportCenterX = cx
+                self.viewportCenterY = cy
+                // Push to iPhone's StreamTileView so it mirrors the Watch's zoom/pan
+                if let name = self.watchedStreamName {
+                    self.remoteViewportPublisher.send(ViewportUpdate(
+                        streamName: name, zoom: zoom, centerX: cx, centerY: cy
+                    ))
+                }
             default:
                 break
             }

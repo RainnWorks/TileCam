@@ -42,6 +42,11 @@ final class WatchSessionManager: NSObject, ObservableObject {
     @Published var subscribedStream: String?
     @Published var currentMode: StreamMode = .videoAndAudio
 
+    /// Viewport synced from iPhone (zoom + normalized center)
+    @Published var syncedZoom: CGFloat = 1.0
+    @Published var syncedCenterX: CGFloat = 0.5
+    @Published var syncedCenterY: CGFloat = 0.5
+
     /// Pushed from iPhone when it wants the Watch to show a specific camera
     @Published var pushedStreamName: String?
 
@@ -180,10 +185,19 @@ extension WatchSessionManager: WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        if let action = message["action"] as? String, action == "showCamera",
-           let streamName = message["streamName"] as? String {
-            Task { @MainActor in
-                self.pushedStreamName = streamName
+        guard let action = message["action"] as? String else { return }
+        Task { @MainActor in
+            switch action {
+            case "showCamera":
+                if let streamName = message["streamName"] as? String {
+                    self.pushedStreamName = streamName
+                }
+            case "viewportSync":
+                self.syncedZoom = message["zoom"] as? CGFloat ?? 1.0
+                self.syncedCenterX = message["centerX"] as? CGFloat ?? 0.5
+                self.syncedCenterY = message["centerY"] as? CGFloat ?? 0.5
+            default:
+                break
             }
         }
     }
