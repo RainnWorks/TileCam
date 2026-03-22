@@ -4,6 +4,22 @@ struct WatchSettingsView: View {
     @EnvironmentObject var session: WatchSessionManager
     @ObservedObject var settings = WatchSettings.shared
 
+    private var wristBehaviorLabel: String {
+        switch settings.wristBehavior {
+        case "audioOnly": return "Listen"
+        case "alwaysOn": return "Stay On"
+        default: return "Pause"
+        }
+    }
+
+    private var wristBehaviorIcon: String {
+        switch settings.wristBehavior {
+        case "audioOnly": return "headphones"
+        case "alwaysOn": return "eye.fill"
+        default: return "moon.zzz.fill"
+        }
+    }
+
     var body: some View {
         List {
             // MARK: - Glance Mode
@@ -28,6 +44,23 @@ struct WatchSettingsView: View {
                         }
                     }
                 }
+            }
+
+            // MARK: - Wrist Behavior (read-only, set on iPhone)
+            Section {
+                HStack {
+                    Label(wristBehaviorLabel, systemImage: wristBehaviorIcon)
+                        .font(.body)
+                    Spacer()
+                    Text("iPhone")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("When Wrist Lowers")
+            } footer: {
+                Text("Change this setting from the iPhone app.")
+                    .font(.caption2)
             }
 
             // MARK: - Streaming

@@ -56,7 +56,7 @@ struct WristBehaviorPicker: View {
 
             // Glass segmented control
             GeometryReader { geo in
-                let segmentWidth = geo.size.width / CGFloat(WristBehavior.allCases.count)
+                let segmentWidth = max(geo.size.width, 1) / CGFloat(WristBehavior.allCases.count)
                 let selectedIndex = CGFloat(WristBehavior.allCases.firstIndex(of: selection) ?? 0)
 
                 ZStack(alignment: .leading) {
@@ -157,6 +157,8 @@ struct WristBehaviorPicker: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(batteryColor)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(batteryLabel)
         .animation(.smooth(duration: 0.2), value: selection)
     }
 

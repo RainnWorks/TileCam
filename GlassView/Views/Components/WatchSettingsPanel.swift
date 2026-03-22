@@ -17,17 +17,17 @@ struct WatchSettingsPanel: View {
                         .foregroundStyle(.white)
                         .opacity(visible ? 1 : 0)
                         .offset(y: visible ? 0 : 4)
-                        .animation(.smooth(duration: 0.3), value: visible)
+                        .animation(.smooth(duration: 0.3).delay(visible ? 0 : 0.06), value: visible)
 
                     Text("Streaming preferences")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.35))
                         .opacity(visible ? 1 : 0)
-                        .animation(.smooth(duration: 0.3).delay(0.06), value: visible)
+                        .animation(.smooth(duration: 0.3).delay(visible ? 0.06 : 0.03), value: visible)
                 }
                 Spacer()
                 Button {
-                    onDismiss()
+                    dismiss()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.semibold))
@@ -38,7 +38,7 @@ struct WatchSettingsPanel: View {
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
                 .opacity(visible ? 1 : 0)
-                .animation(.smooth(duration: 0.3).delay(0.09), value: visible)
+                .animation(.smooth(duration: 0.3).delay(visible ? 0.09 : 0), value: visible)
                 .accessibilityLabel("Close")
             }
 
@@ -46,7 +46,7 @@ struct WatchSettingsPanel: View {
             WristBehaviorPicker(selection: $wristBehavior)
                 .opacity(visible ? 1 : 0)
                 .offset(y: visible ? 0 : 6)
-                .animation(.smooth(duration: 0.3).delay(0.12), value: visible)
+                .animation(.smooth(duration: 0.3).delay(visible ? 0.12 : 0), value: visible)
         }
         .padding(24)
         .frame(maxWidth: 380)
@@ -54,5 +54,13 @@ struct WatchSettingsPanel: View {
         .glassBackground(cornerRadius: 24)
         .padding(.horizontal, 24)
         .onAppear { visible = true }
+    }
+
+    private func dismiss() {
+        visible = false
+        // Allow staggered exit animations to play before removing from hierarchy
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            onDismiss()
+        }
     }
 }

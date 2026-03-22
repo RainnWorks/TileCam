@@ -67,6 +67,10 @@ final class WatchSessionManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var subscribeRetryTask: Task<Void, Never>?
 
+    /// Monotonic counter to prevent message ordering races.
+    /// Included in subscribe messages so the iPhone can reject stale requests.
+    private var subscribeGeneration: UInt64 = 0
+
     override init() {
         super.init()
         guard WCSession.isSupported() else { return }
@@ -80,6 +84,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
         subscribeRetryTask?.cancel()
         subscribeRetryTask = nil
 
+        subscribeGeneration &+= 1
         subscribedStream = streamName
         currentMode = mode
         latestSnapshot = nil
@@ -114,7 +119,8 @@ final class WatchSessionManager: NSObject, ObservableObject {
                 "mode": mode.rawValue,
                 "zoom": Double(zoom),
                 "centerX": Double(centerX),
-                "centerY": Double(centerY)
+                "centerY": Double(centerY),
+                "generation": subscribeGeneration
             ],
             replyHandler: { [weak self] reply in
                 Task { @MainActor in
@@ -167,7 +173,14 @@ final class WatchSessionManager: NSObject, ObservableObject {
         } else if !audioPlayer.isPlaying {
             audioPlayer.start()
         }
+        // Preserve existing snapshot during mode change to avoid black flash on wrist-raise.
+        let preservedSnapshot = latestSnapshot
+        let preservedFrameTime = lastFrameTime
         subscribe(to: stream, mode: mode)
+        if preservedSnapshot != nil {
+            latestSnapshot = preservedSnapshot
+            lastFrameTime = preservedFrameTime
+        }
     }
 
     func sendViewport(zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
@@ -223,6 +236,10 @@ extension WatchSessionManager: WCSessionDelegate {
             let ctx = session.receivedApplicationContext
             if let streams = ctx["streams"] as? [String] {
                 self.availableStreams = streams
+            }
+            // Also restore wristBehavior from applicationContext on cold launch
+            if let behavior = ctx["wristBehavior"] as? String {
+                WatchSettings.shared.wristBehavior = behavior
             }
         }
     }

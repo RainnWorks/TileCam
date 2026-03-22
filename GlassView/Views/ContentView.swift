@@ -135,7 +135,9 @@ struct ContentView: View {
             return .handled
         }
         .onKeyPress(.escape) {
-            if showServerInput {
+            if showWatchSettings {
+                withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
+            } else if showServerInput {
                 withAnimation { showServerInput = false }
             } else if showUI {
                 withAnimation { showUI = false }
@@ -203,7 +205,7 @@ struct ContentView: View {
         hideTimer = Task {
             try? await Task.sleep(for: autoHideDelay)
             guard !Task.isCancelled else { return }
-            if !showServerInput {
+            if !showServerInput && !showWatchSettings {
                 withAnimation(.smooth(duration: 0.4)) {
                     showUI = false
                 }

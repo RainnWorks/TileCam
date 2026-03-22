@@ -115,6 +115,9 @@ struct CameraSnapshotView: View {
             cameraPicker
         }
         .onAppear {
+            // Stop extended runtime session — we're back in the foreground
+            ExtendedRuntimeManager.shared.stop()
+
             activeStreamName = initialStreamName
             selectedMode = settings.resolvedMode
             zoom = max(initialZoom, 1.0)
@@ -139,18 +142,27 @@ struct CameraSnapshotView: View {
         }
         .onDisappear {
             viewportDebounce?.cancel()
-            timeoutTask?.cancel()
-            stalenessTimer?.cancel()
             controlsHideTask?.cancel()
 
             // Respect wrist-down behavior setting
             if settings.keepAudioOnWristDown && !settings.keepVideoOnWristDown {
+                // Audio-only: cancel timeout (passive listening shouldn't be interrupted)
+                timeoutTask?.cancel()
+                stalenessTimer?.cancel()
                 if session.currentMode != .audioOnly {
                     session.changeMode(.audioOnly)
                 }
+                ExtendedRuntimeManager.shared.startIfNeeded()
             } else if settings.keepVideoOnWristDown {
-                // Keep everything running
+                // Always-on: cancel timeout, keep everything running
+                timeoutTask?.cancel()
+                stalenessTimer?.cancel()
+                ExtendedRuntimeManager.shared.startIfNeeded()
             } else {
+                // Eco: stop everything
+                timeoutTask?.cancel()
+                stalenessTimer?.cancel()
+                ExtendedRuntimeManager.shared.stop()
                 session.unsubscribe()
             }
         }

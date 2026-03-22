@@ -323,6 +323,9 @@ struct GlanceCameraView: View {
     // MARK: - Lifecycle
 
     private func startGlance() {
+        // Stop extended runtime session — we're back in the foreground
+        ExtendedRuntimeManager.shared.stop()
+
         guard session.isPhoneReachable, let camera = resolvedCameraName else { return }
 
         // If already subscribed to this camera (e.g. wrist-raise after audio-only or always-on),
@@ -342,20 +345,29 @@ struct GlanceCameraView: View {
     }
 
     private func stopGlance() {
-        timeoutTask?.cancel()
-        stalenessTimer?.cancel()
         controlsHideTask?.cancel()
 
         // Respect wrist-down behavior setting
         if settings.keepAudioOnWristDown && !settings.keepVideoOnWristDown {
             // Audio-only: switch to audio mode, keep streaming
+            // Cancel timeout — passive listening shouldn't be interrupted by "still watching?"
+            timeoutTask?.cancel()
+            stalenessTimer?.cancel()
             if session.currentMode != .audioOnly {
                 session.changeMode(.audioOnly)
             }
+            ExtendedRuntimeManager.shared.startIfNeeded()
         } else if settings.keepVideoOnWristDown {
             // Always-on: keep everything running (skip unsubscribe)
+            // Cancel timeout — user explicitly chose to keep streaming
+            timeoutTask?.cancel()
+            stalenessTimer?.cancel()
+            ExtendedRuntimeManager.shared.startIfNeeded()
         } else {
             // Eco: stop everything
+            timeoutTask?.cancel()
+            stalenessTimer?.cancel()
+            ExtendedRuntimeManager.shared.stop()
             session.unsubscribe()
         }
     }

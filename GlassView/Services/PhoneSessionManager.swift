@@ -53,6 +53,13 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     /// Guards against zombie poller — incremented on each subscribe/unsubscribe cycle.
     private var streamGeneration: UInt64 = 0
 
+    /// Last Watch subscribe generation received — rejects stale/reordered subscribe messages.
+    private var lastWatchGeneration: UInt64 = 0
+
+    /// Tracks last Watch subscription for BT blip recovery.
+    /// When Bluetooth briefly drops and reconnects, we can restore the stream.
+    private var lastWatchSubscription: (name: String, mode: WatchStreamMode)?
+
     /// Current viewport from Watch, used for cropping MJPEG frames.
     private var viewportZoom: CGFloat = 1.0
     private var viewportCenterX: CGFloat = 0.5
@@ -114,14 +121,30 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    /// Syncs the wrist-down behavior setting to the Watch via a direct message.
+    /// Syncs the wrist-down behavior setting to the Watch via direct message + applicationContext.
+    /// Dual-write ensures delivery: sendMessage for immediacy, applicationContext for persistence.
     func syncWristBehavior(_ behavior: String) {
-        guard let session, session.isReachable else { return }
-        session.sendMessage(
-            ["action": "wristBehavior", "value": behavior],
-            replyHandler: nil,
-            errorHandler: { error in log.error("wristBehavior sync failed: \(error)") }
-        )
+        guard let session else { return }
+
+        // Immediate delivery if Watch is reachable
+        if session.isReachable {
+            session.sendMessage(
+                ["action": "wristBehavior", "value": behavior],
+                replyHandler: nil,
+                errorHandler: { error in log.error("wristBehavior sync failed: \(error)") }
+            )
+        }
+
+        // Also update applicationContext for persistence (survives app restarts, delivered on cold launch)
+        guard session.activationState == .activated else { return }
+        var ctx = session.receivedApplicationContext
+        ctx["wristBehavior"] = behavior
+        ctx["timestamp"] = Date().timeIntervalSince1970
+        do {
+            try session.updateApplicationContext(ctx)
+        } catch {
+            log.error("Failed to update applicationContext with wristBehavior: \(error)")
+        }
     }
 
     /// One-shot: send a camera + current viewport to the Watch.
@@ -177,7 +200,8 @@ final class PhoneSessionManager: NSObject, ObservableObject {
 
     private func subscribeToStream(_ streamName: String, mode: WatchStreamMode, viewport: (CGFloat, CGFloat, CGFloat)?) {
         log.info("Watch subscribing to: \(streamName) mode: \(mode.rawValue)")
-        unsubscribeFromStream()
+        lastWatchSubscription = (name: streamName, mode: mode)
+        unsubscribeFromStream(clearRecovery: false)
 
         streamGeneration &+= 1
         watchedStreamName = streamName
@@ -202,8 +226,9 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    private func unsubscribeFromStream() {
+    private func unsubscribeFromStream(clearRecovery: Bool = true) {
         streamGeneration &+= 1
+        if clearRecovery { lastWatchSubscription = nil }
         snapshotTask?.cancel()
         snapshotTask = nil
         audioTask?.cancel()
@@ -519,7 +544,18 @@ extension PhoneSessionManager: WCSessionDelegate {
         Task { @MainActor in
             self.isWatchReachable = session.isReachable
             if !session.isReachable {
-                self.unsubscribeFromStream()
+                // Don't clear recovery info — we may need to re-subscribe on BT restore
+                self.unsubscribeFromStream(clearRecovery: false)
+            } else if let sub = self.lastWatchSubscription, self.watchedStreamName == nil {
+                // BT blip recovery: Watch had an active subscription before the blip.
+                // Check wrist behavior — only auto-recover for non-eco modes.
+                let behavior = UserDefaults.standard.string(forKey: "wristBehavior") ?? "eco"
+                if behavior != "eco" {
+                    log.info("BT recovered — restoring stream \(sub.name) mode \(sub.mode.rawValue)")
+                    self.subscribeToStream(sub.name, mode: sub.mode, viewport: nil)
+                } else {
+                    self.lastWatchSubscription = nil
+                }
             }
         }
     }
@@ -548,6 +584,15 @@ extension PhoneSessionManager: WCSessionDelegate {
             switch request {
             case "subscribe":
                 if let name = message["streamName"] as? String {
+                    // Reject stale/reordered subscribe messages using monotonic generation counter
+                    if let gen = message["generation"] as? UInt64 {
+                        guard gen >= self.lastWatchGeneration else {
+                            log.info("Ignoring stale subscribe (gen \(gen) < \(self.lastWatchGeneration))")
+                            replyHandler?(["status": "stale"])
+                            return
+                        }
+                        self.lastWatchGeneration = gen
+                    }
                     let modeStr = message["mode"] as? String ?? "videoAndAudio"
                     let mode = WatchStreamMode(rawValue: modeStr) ?? .videoAndAudio
                     var viewport: (CGFloat, CGFloat, CGFloat)?
@@ -559,7 +604,7 @@ extension PhoneSessionManager: WCSessionDelegate {
                     self.subscribeToStream(name, mode: mode, viewport: viewport)
                 }
             case "unsubscribe":
-                self.unsubscribeFromStream()
+                self.unsubscribeFromStream(clearRecovery: true)
             case "viewport":
                 let zoom = message["zoom"] as? Double ?? 1.0
                 let cx = message["centerX"] as? Double ?? 0.5
