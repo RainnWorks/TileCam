@@ -49,6 +49,12 @@ final class WatchSessionManager: NSObject, ObservableObject {
     /// True while waiting for subscribe confirmation from iPhone.
     @Published var isSubscribing = false
 
+    /// Fix #2: Timestamp of last received video frame for staleness detection.
+    @Published var lastFrameTime: Date?
+
+    /// Fix #3: True when iPhone has signalled it's backgrounded.
+    @Published var isStreamPaused = false
+
     struct PushedCamera: Equatable {
         let streamName: String
         let zoom: CGFloat
@@ -78,6 +84,8 @@ final class WatchSessionManager: NSObject, ObservableObject {
         currentMode = mode
         latestSnapshot = nil
         isSubscribing = true
+        lastFrameTime = nil
+        isStreamPaused = false
 
         if mode != .videoOnly {
             audioPlayer.start()
@@ -90,7 +98,6 @@ final class WatchSessionManager: NSObject, ObservableObject {
     /// Retries up to 3 times with exponential backoff on failure/timeout.
     private func sendSubscribe(streamName: String, mode: StreamMode, zoom: CGFloat, centerX: CGFloat, centerY: CGFloat, attempt: Int) {
         guard let session, session.isReachable else {
-            // Phone not reachable — schedule retry
             if attempt <= 3 {
                 scheduleRetry(streamName: streamName, mode: mode, zoom: zoom, centerX: centerX, centerY: centerY, attempt: attempt)
             } else {
@@ -187,6 +194,8 @@ final class WatchSessionManager: NSObject, ObservableObject {
         subscribedStream = nil
         latestSnapshot = nil
         isSubscribing = false
+        lastFrameTime = nil
+        isStreamPaused = false
         audioPlayer.stop()
 
         guard wasSubscribed, let session, session.isReachable else { return }
@@ -245,6 +254,8 @@ extension WatchSessionManager: WCSessionDelegate {
             guard let image = UIImage(data: Data(payload)) else { return }
             Task { @MainActor in
                 self.latestSnapshot = image
+                self.lastFrameTime = Date()
+                self.isStreamPaused = false
             }
         case 0x02: // Audio chunk (MP3)
             Task { @MainActor in
@@ -258,13 +269,23 @@ extension WatchSessionManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let action = message["action"] as? String else { return }
         Task { @MainActor in
-            if action == "showCamera", let streamName = message["streamName"] as? String {
+            switch action {
+            case "showCamera":
+                guard let streamName = message["streamName"] as? String else { return }
                 self.pushedCamera = PushedCamera(
                     streamName: streamName,
                     zoom: message["zoom"] as? CGFloat ?? 1.0,
                     centerX: message["centerX"] as? CGFloat ?? 0.5,
                     centerY: message["centerY"] as? CGFloat ?? 0.5
                 )
+            case "streamPaused":
+                self.isStreamPaused = true
+                log.info("iPhone stream paused (backgrounded)")
+            case "streamResumed":
+                self.isStreamPaused = false
+                log.info("iPhone stream resumed")
+            default:
+                break
             }
         }
     }

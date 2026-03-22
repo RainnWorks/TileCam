@@ -24,6 +24,15 @@ private let maxWCMessageSize = 62_000
 /// MJPEG frame buffer cap — drop malformed frames that never terminate.
 private let maxFrameBufferSize = 512_000
 
+/// Snapshot of viewport values for nonisolated crop work.
+private struct ViewportSnapshot {
+    let zoom: CGFloat
+    let centerX: CGFloat
+    let centerY: CGFloat
+
+    var isCropping: Bool { zoom > 1.01 }
+}
+
 /// Manages WatchConnectivity on the iPhone side.
 /// Streams JPEG snapshots and MP3 audio from go2rtc HTTP endpoints to the Watch.
 /// The Watch controls its own viewport; iPhone just crops frames to match.
@@ -57,6 +66,13 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     /// URLSession used for the current audio stream — invalidated on unsubscribe.
     private var audioStreamSession: URLSession?
 
+    /// Fix #9: Cached last viewport used for crop to skip redundant re-encodes.
+    private var lastCropViewport: ViewportSnapshot?
+    private var lastCroppedFrame: Data?
+
+    /// Fix #3: Track whether app is backgrounded to notify Watch.
+    private var isAppBackgrounded = false
+
     override init() {
         super.init()
         guard WCSession.isSupported() else { return }
@@ -64,6 +80,20 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         s.delegate = self
         s.activate()
         self.session = s
+
+        // Fix #3: Observe app lifecycle
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
 
     func updateService(_ service: Go2RTCService?) {
@@ -93,6 +123,42 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             "centerX": Double(centerX),
             "centerY": Double(centerY)
         ], replyHandler: nil)
+    }
+
+    // MARK: - App Lifecycle (Fix #3)
+
+    @objc private nonisolated func appDidEnterBackground() {
+        Task { @MainActor in
+            self.isAppBackgrounded = true
+            log.info("App backgrounded — notifying Watch")
+            // Tell Watch the stream is pausing
+            if self.watchedStreamName != nil, let session = self.session, session.isReachable {
+                session.sendMessage(
+                    ["action": "streamPaused", "reason": "background"],
+                    replyHandler: nil,
+                    errorHandler: { error in log.error("streamPaused send failed: \(error)") }
+                )
+            }
+        }
+    }
+
+    @objc private nonisolated func appWillEnterForeground() {
+        Task { @MainActor in
+            self.isAppBackgrounded = false
+            log.info("App foregrounded — resuming Watch stream if needed")
+            // Resume streaming if Watch is still subscribed
+            if let name = self.watchedStreamName, let session = self.session, session.isReachable {
+                session.sendMessage(
+                    ["action": "streamResumed"],
+                    replyHandler: nil,
+                    errorHandler: { error in log.error("streamResumed send failed: \(error)") }
+                )
+                // Re-subscribe to restart the stream tasks
+                let mode = self.currentMode
+                let viewport = (self.viewportZoom, self.viewportCenterX, self.viewportCenterY)
+                self.subscribeToStream(name, mode: mode, viewport: viewport)
+            }
+        }
     }
 
     // MARK: - Stream Management
@@ -135,12 +201,21 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         viewportCenterX = 0.5
         viewportCenterY = 0.5
         videoSendInFlight = false
+        lastCropViewport = nil
+        lastCroppedFrame = nil
 
         // Invalidate URLSessions to prevent leaked connections
         mjpegSession?.invalidateAndCancel()
         mjpegSession = nil
         audioStreamSession?.invalidateAndCancel()
         audioStreamSession = nil
+    }
+
+    // MARK: - Viewport Snapshot
+
+    /// Captures current viewport values for use in detached tasks.
+    private func snapshotViewport() -> ViewportSnapshot {
+        ViewportSnapshot(zoom: viewportZoom, centerX: viewportCenterX, centerY: viewportCenterY)
     }
 
     // MARK: - Video: MJPEG stream from /api/stream.mjpeg
@@ -170,7 +245,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                             buffer.removeAll(keepingCapacity: true)
                         }
                     } else {
-                        // Fix #3: Cap buffer size to prevent unbounded growth on malformed frames
                         if buffer.count > maxFrameBufferSize {
                             log.warning("MJPEG frame buffer exceeded \(maxFrameBufferSize) bytes, dropping")
                             buffer.removeAll(keepingCapacity: true)
@@ -179,10 +253,22 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                         }
 
                         if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
-                            let frame = await self?.cropFrameToViewport(buffer) ?? buffer
-                            // Fix #1: Ensure frame fits WCSession size limit
-                            let sizedFrame = await self?.ensureFrameFits(frame) ?? frame
-                            // Fix #4: Skip frame if previous send still in-flight (backpressure)
+                            // Fix #1: Snapshot viewport on MainActor, then crop off-main
+                            let viewport = await MainActor.run { self?.snapshotViewport() }
+                            guard let viewport else { break }
+
+                            // Fix #9: Skip crop if viewport unchanged and we have a cached frame of same source size
+                            let frame: Data
+                            if let cached = await MainActor.run(body: { self?.cachedCropIfUnchanged(viewport: viewport, rawSize: buffer.count) }) {
+                                frame = cached
+                            } else {
+                                let cropped = Self.cropFrame(buffer, viewport: viewport)
+                                let sized = Self.ensureFrameFits(cropped)
+                                await MainActor.run { self?.updateCropCache(viewport: viewport, frame: sized) }
+                                frame = sized
+                            }
+
+                            // Backpressure: skip frame if previous send still in-flight
                             let shouldSend = await MainActor.run { () -> Bool in
                                 guard let self else { return false }
                                 if self.videoSendInFlight { return false }
@@ -190,7 +276,7 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                                 return true
                             }
                             if shouldSend {
-                                await self?.sendVideoFrame(sizedFrame)
+                                await self?.sendVideoFrame(frame)
                             }
                             buffer.removeAll(keepingCapacity: true)
                             inFrame = false
@@ -200,7 +286,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             } catch {
                 if !Task.isCancelled {
                     log.error("MJPEG stream failed: \(error)")
-                    // Fix #3: Check generation to prevent zombie poller
                     await self?.fallbackToPollingIfStillActive(
                         service: service, streamName: streamName, generation: generation
                     )
@@ -223,9 +308,10 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         snapshotTask = Task {
             while !Task.isCancelled && generation == streamGeneration {
                 do {
-                    var jpegData = try await service.fetchFrame(streamName: streamName)
-                    jpegData = cropFrameToViewport(jpegData)
-                    let sizedFrame = ensureFrameFits(jpegData)
+                    let jpegData = try await service.fetchFrame(streamName: streamName)
+                    let viewport = snapshotViewport()
+                    let cropped = Self.cropFrame(jpegData, viewport: viewport)
+                    let sizedFrame = Self.ensureFrameFits(cropped)
                     sendVideoFrame(sizedFrame)
                 } catch {
                     if !Task.isCancelled {
@@ -237,13 +323,30 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Frame Size Gate (Fix #1)
+    // MARK: - Crop Cache (Fix #9)
+
+    private func cachedCropIfUnchanged(viewport: ViewportSnapshot, rawSize: Int) -> Data? {
+        guard let lastVP = lastCropViewport, let lastFrame = lastCroppedFrame else { return nil }
+        // Only use cache if viewport is identical (same zoom+pan)
+        if abs(lastVP.zoom - viewport.zoom) < 0.001
+            && abs(lastVP.centerX - viewport.centerX) < 0.001
+            && abs(lastVP.centerY - viewport.centerY) < 0.001 {
+            return lastFrame
+        }
+        return nil
+    }
+
+    private func updateCropCache(viewport: ViewportSnapshot, frame: Data) {
+        lastCropViewport = viewport
+        lastCroppedFrame = frame
+    }
+
+    // MARK: - Frame Size Gate (nonisolated — Fix #1)
 
     /// Re-encodes at progressively lower quality until the frame fits under the WCSession limit.
-    private func ensureFrameFits(_ jpegData: Data) -> Data {
+    private nonisolated static func ensureFrameFits(_ jpegData: Data) -> Data {
         guard jpegData.count > maxWCMessageSize else { return jpegData }
 
-        // Try decreasing quality levels
         guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             return jpegData
@@ -268,10 +371,11 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         return scaled.jpegData(compressionQuality: 0.3) ?? jpegData
     }
 
-    // MARK: - Viewport Cropping
+    // MARK: - Viewport Cropping (nonisolated — Fix #1)
 
-    private func cropFrameToViewport(_ jpegData: Data) -> Data {
-        guard viewportZoom > 1.01 else { return jpegData }
+    /// Crops a JPEG frame to the given viewport. Runs off MainActor.
+    private nonisolated static func cropFrame(_ jpegData: Data, viewport: ViewportSnapshot) -> Data {
+        guard viewport.isCropping else { return jpegData }
 
         guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
@@ -280,10 +384,10 @@ final class PhoneSessionManager: NSObject, ObservableObject {
 
         let imgW = CGFloat(cgImage.width)
         let imgH = CGFloat(cgImage.height)
-        let cropW = imgW / viewportZoom
-        let cropH = imgH / viewportZoom
-        let cropX = (viewportCenterX * imgW) - (cropW / 2)
-        let cropY = (viewportCenterY * imgH) - (cropH / 2)
+        let cropW = imgW / viewport.zoom
+        let cropH = imgH / viewport.zoom
+        let cropX = (viewport.centerX * imgW) - (cropW / 2)
+        let cropY = (viewport.centerY * imgH) - (cropH / 2)
         let clampedX = min(max(cropX, 0), imgW - cropW)
         let clampedY = min(max(cropY, 0), imgH - cropH)
         let cropRect = CGRect(x: clampedX, y: clampedY, width: cropW, height: cropH)
@@ -296,7 +400,7 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         return uiImage.jpegData(compressionQuality: 0.6) ?? jpegData
     }
 
-    // MARK: - Audio: Stream /api/stream.mp3 (Fix #5: MP3 frame-aligned chunking)
+    // MARK: - Audio: Stream /api/stream.mp3 (MP3 frame-aligned chunking)
 
     private func startAudioStreaming(service: Go2RTCService, streamName: String) {
         audioTask = Task.detached { [weak self] in
@@ -319,7 +423,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                             chunk = buffer.prefix(splitPoint)
                             buffer = Data(buffer.suffix(from: splitPoint))
                         } else {
-                            // No sync word found — send what we have (degenerate case)
                             chunk = buffer
                             buffer = Data()
                         }
@@ -335,10 +438,8 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     }
 
     /// Finds the last MP3 sync word (0xFF 0xE0+) boundary in the buffer.
-    /// Returns the byte offset of the last sync word, or 0 if none found.
-    private static func findLastMP3FrameBoundary(in data: Data) -> Int {
+    private nonisolated static func findLastMP3FrameBoundary(in data: Data) -> Int {
         guard data.count > 2 else { return 0 }
-        // Scan backwards for an MP3 sync word: 0xFF followed by 0xE0-0xFF (11 sync bits)
         for i in stride(from: data.count - 2, through: 1, by: -1) {
             if data[data.startIndex + i] == 0xFF && (data[data.startIndex + i + 1] & 0xE0) == 0xE0 {
                 return i
@@ -454,6 +555,9 @@ extension PhoneSessionManager: WCSessionDelegate {
                 self.viewportZoom = zoom
                 self.viewportCenterX = cx
                 self.viewportCenterY = cy
+                // Invalidate crop cache when viewport changes
+                self.lastCropViewport = nil
+                self.lastCroppedFrame = nil
             default:
                 break
             }

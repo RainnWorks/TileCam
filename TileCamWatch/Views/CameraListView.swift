@@ -34,15 +34,29 @@ struct CameraListView: View {
                 .environmentObject(session)
             }
             .onChange(of: session.pushedCamera) { _, pushed in
-                if let pushed {
+                guard let pushed else { return }
+                // Fix #4: Pop to root first to prevent double-push / stacked dead views
+                if !navigationPath.isEmpty {
+                    navigationPath = NavigationPath()
+                    // Delay to let the pop animate before pushing
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(300))
+                        navigationPath.append(CameraDestination(
+                            streamName: pushed.streamName,
+                            zoom: pushed.zoom,
+                            centerX: pushed.centerX,
+                            centerY: pushed.centerY
+                        ))
+                    }
+                } else {
                     navigationPath.append(CameraDestination(
                         streamName: pushed.streamName,
                         zoom: pushed.zoom,
                         centerX: pushed.centerX,
                         centerY: pushed.centerY
                     ))
-                    session.pushedCamera = nil
                 }
+                session.pushedCamera = nil
             }
         }
     }
@@ -71,7 +85,7 @@ struct CameraListView: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
 
-            Text("Open TileCam\non iPhone")
+            Text("Reconnecting to\niPhone...")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

@@ -3,6 +3,10 @@ import os
 
 private let log = Logger(subsystem: "works.rainn.tilecam.watch", category: "Audio")
 
+/// Max number of buffers queued on AVAudioPlayerNode before we start dropping.
+/// ~20 chunks at ~4KB ≈ 2-3 seconds of audio. Beyond this we assume drift.
+private let maxQueuedBuffers = 20
+
 /// Plays MP3 audio chunks received from the iPhone via WatchConnectivity.
 /// Writes each chunk to a temp file and schedules it as a PCM buffer on AVAudioPlayerNode.
 @MainActor
@@ -13,6 +17,9 @@ final class AudioChunkPlayer: ObservableObject {
     private var playerNode: AVAudioPlayerNode?
     private var chunkIndex = 0
     private let tempDir: URL
+
+    /// Fix #5: Track queued buffer count for drift detection.
+    private var queuedBufferCount = 0
 
     init() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tilecam_audio")
@@ -38,6 +45,7 @@ final class AudioChunkPlayer: ObservableObject {
             player.play()
             self.engine = engine
             self.playerNode = player
+            self.queuedBufferCount = 0
             isPlaying = true
             log.info("Audio engine started")
         } catch {
@@ -50,6 +58,7 @@ final class AudioChunkPlayer: ObservableObject {
         engine?.stop()
         engine = nil
         playerNode = nil
+        queuedBufferCount = 0
         isPlaying = false
         cleanupTempFiles()
         log.info("Audio engine stopped")
@@ -57,6 +66,15 @@ final class AudioChunkPlayer: ObservableObject {
 
     func enqueue(mp3Data: Data) {
         guard let playerNode, let engine, engine.isRunning else { return }
+
+        // Fix #5: Drop incoming audio if too far behind (drift protection)
+        if queuedBufferCount >= maxQueuedBuffers {
+            log.warning("Audio queue saturated (\(queuedBufferCount) buffers), dropping to reduce drift")
+            // Flush all queued audio and restart from this point
+            playerNode.stop()
+            playerNode.play()
+            queuedBufferCount = 0
+        }
 
         // Write MP3 chunk to temp file for AVAudioFile to read
         let fileURL = tempDir.appendingPathComponent("chunk_\(chunkIndex).mp3")
@@ -78,7 +96,7 @@ final class AudioChunkPlayer: ObservableObject {
             // Convert to output format if needed
             let outputFormat = engine.outputNode.outputFormat(forBus: 0)
             if buffer.format == outputFormat {
-                playerNode.scheduleBuffer(buffer)
+                scheduleWithTracking(buffer, on: playerNode)
             } else if let converter = AVAudioConverter(from: buffer.format, to: outputFormat) {
                 let convertedCapacity = AVAudioFrameCount(
                     Double(frameCount) * outputFormat.sampleRate / buffer.format.sampleRate
@@ -101,7 +119,7 @@ final class AudioChunkPlayer: ObservableObject {
                 }
 
                 if error == nil && converted.frameLength > 0 {
-                    playerNode.scheduleBuffer(converted)
+                    scheduleWithTracking(converted, on: playerNode)
                 }
             }
 
@@ -111,6 +129,16 @@ final class AudioChunkPlayer: ObservableObject {
             }
         } catch {
             log.error("Failed to enqueue audio chunk: \(error)")
+        }
+    }
+
+    /// Schedules a buffer and tracks queue depth for drift detection.
+    private func scheduleWithTracking(_ buffer: AVAudioPCMBuffer, on player: AVAudioPlayerNode) {
+        queuedBufferCount += 1
+        player.scheduleBuffer(buffer) { [weak self] in
+            Task { @MainActor in
+                self?.queuedBufferCount -= 1
+            }
         }
     }
 

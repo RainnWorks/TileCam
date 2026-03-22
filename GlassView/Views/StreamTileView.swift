@@ -218,13 +218,24 @@ struct StreamTileView: View {
                             streamName: stream.name, zoom: zoom, centerX: cx, centerY: cy
                         )
                         zoomHaptic.impactOccurred()
+                        // Fix #10: Mark as discovered after first use
+                        if !UserDefaults.standard.bool(forKey: "watchButtonDiscovered") {
+                            UserDefaults.standard.set(true, forKey: "watchButtonDiscovered")
+                        }
                     } label: {
-                        Image(systemName: "applewatch")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.black.opacity(0.4), in: Capsule())
+                        HStack(spacing: 3) {
+                            Image(systemName: "applewatch")
+                                .font(.system(size: 9))
+                            // Fix #10: Show label hint on first appearance
+                            if !UserDefaults.standard.bool(forKey: "watchButtonDiscovered") {
+                                Text("Watch")
+                                    .font(.system(size: 8).weight(.medium))
+                            }
+                        }
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.4), in: Capsule())
                     }
                     .accessibilityLabel("Send to Apple Watch")
                 }
