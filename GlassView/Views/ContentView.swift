@@ -28,9 +28,26 @@ struct ContentView: View {
                 // All UI fades in/out together
                 if showUI {
                     VStack {
-                        // Top: server button
+                        // Top bar
                         HStack {
                             Spacer()
+
+                            Button {
+                                withAnimation(.smooth(duration: 0.2)) {
+                                    appState.isGlobalAudioEnabled.toggle()
+                                }
+                                haptic.impactOccurred()
+                                keepUIVisible()
+                            } label: {
+                                Image(systemName: appState.isGlobalAudioEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                                    .font(.body)
+                                    .foregroundStyle(.white)
+                                    .contentTransition(.symbolEffect(.replace))
+                            }
+                            .liquidGlassCircle()
+                            .contentShape(Rectangle())
+                            .accessibilityLabel(appState.isGlobalAudioEnabled ? "Audio on" : "Audio muted")
+                            .accessibilityHint("Double-tap to toggle audio")
 
                             Button {
                                 withAnimation { showServerInput.toggle() }
@@ -102,6 +119,23 @@ struct ContentView: View {
                 } else {
                     appState.selectedStreams.append(stream)
                 }
+            }
+            return .handled
+        }
+        .onKeyPress(characters: CharacterSet(charactersIn: "m")) { _ in
+            withAnimation(.smooth(duration: 0.2)) {
+                appState.isGlobalAudioEnabled.toggle()
+            }
+            return .handled
+        }
+        .onKeyPress(characters: .decimalDigits, modifiers: .option) { press in
+            guard let digit = Int(press.characters), digit >= 1,
+                  digit <= appState.availableStreams.count else {
+                return .ignored
+            }
+            let stream = appState.availableStreams[digit - 1]
+            withAnimation(.smooth(duration: 0.2)) {
+                appState.toggleStreamMute(stream.name)
             }
             return .handled
         }

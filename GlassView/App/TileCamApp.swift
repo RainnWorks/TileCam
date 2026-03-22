@@ -45,6 +45,36 @@ final class AppState: ObservableObject {
         didSet { LayoutStore.saveSelectedStreams(selectedStreams) }
     }
 
+    // MARK: - Audio state
+
+    var isGlobalAudioEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "isGlobalAudioEnabled") as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "isGlobalAudioEnabled")
+            objectWillChange.send()
+        }
+    }
+
+    var mutedStreamNames: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "mutedStreamNames") ?? []) }
+        set {
+            UserDefaults.standard.set(Array(newValue), forKey: "mutedStreamNames")
+            objectWillChange.send()
+        }
+    }
+
+    func isStreamAudioEnabled(_ streamName: String) -> Bool {
+        isGlobalAudioEnabled && !mutedStreamNames.contains(streamName)
+    }
+
+    func toggleStreamMute(_ streamName: String) {
+        if mutedStreamNames.contains(streamName) {
+            mutedStreamNames.remove(streamName)
+        } else {
+            mutedStreamNames.insert(streamName)
+        }
+    }
+
     init() {
         self.selectedStreams = LayoutStore.loadSelectedStreams()
         updateService()

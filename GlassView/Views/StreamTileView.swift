@@ -108,6 +108,20 @@ struct StreamTileView: View {
                 .stroke(Color.green.opacity(showRecoveryFlash ? 0.5 : 0), lineWidth: 1.5)
                 .animation(.smooth(duration: 0.6), value: showRecoveryFlash)
 
+            // Audio waveform indicator (always visible, independent of UI)
+            if isStreamAudible {
+                VStack {
+                    HStack {
+                        Spacer()
+                        AudioWaveformIndicator()
+                            .padding(6)
+                    }
+                    Spacer()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .allowsHitTesting(false)
+            }
+
             // Bottom bar
             if showUI {
                 VStack {
@@ -165,9 +179,17 @@ struct StreamTileView: View {
             }
         }
         .clipped()
+        .onLongPressGesture(minimumDuration: 0.4) {
+            withAnimation(.smooth(duration: 0.2)) {
+                appState.toggleStreamMute(stream.name)
+            }
+            zoomHaptic.impactOccurred()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Stream: \(stream.name.replacingOccurrences(of: "_", with: " "))")
+        .accessibilityValue(isStreamAudible ? "Audio on" : "Audio muted")
         .animation(.smooth(duration: 0.4), value: client.videoTrack != nil)
+        .animation(.smooth(duration: 0.25), value: isStreamAudible)
         .onChange(of: client.connectionState) { _, newState in
             if newState == .failed || newState == .disconnected {
                 wasDisconnected = true
@@ -180,6 +202,9 @@ struct StreamTileView: View {
                 }
             }
         }
+        .onChange(of: appState.isGlobalAudioEnabled) { _, _ in syncAudioState() }
+        .onChange(of: appState.mutedStreamNames) { _, _ in syncAudioState() }
+        .onChange(of: client.audioTrack) { _, _ in syncAudioState() }
         .task {
             await client.connect()
         }
@@ -302,6 +327,16 @@ struct StreamTileView: View {
             panY: Double(transform.ty)
         )
         LayoutStore.saveViewState(state, for: stream.name)
+    }
+
+    // MARK: - Audio
+
+    private var isStreamAudible: Bool {
+        appState.isStreamAudioEnabled(stream.name) && client.audioTrack != nil
+    }
+
+    private func syncAudioState() {
+        client.isAudioEnabled = appState.isStreamAudioEnabled(stream.name)
     }
 
     // MARK: - Status

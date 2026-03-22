@@ -18,10 +18,15 @@ final class WebRTCClient: NSObject, ObservableObject {
     let streamName: String
 
     @Published var videoTrack: RTCVideoTrack?
+    @Published var audioTrack: RTCAudioTrack?
     @Published var connectionState: RTCIceConnectionState = .new
     @Published var error: String?
     @Published var isRetrying = false
     @Published private(set) var retryCount = 0
+
+    var isAudioEnabled: Bool = true {
+        didSet { audioTrack?.isEnabled = isAudioEnabled }
+    }
 
     private var retryTask: Task<Void, Never>?
     private var isManuallyDisconnected = false
@@ -118,14 +123,18 @@ final class WebRTCClient: NSObject, ObservableObject {
             try await pc.setRemoteDescription(answer)
             log.info("[\(self.streamName)] Remote description set — waiting for ICE")
 
-            // Extract video track from transceivers (unified plan)
+            // Extract tracks from transceivers (unified plan)
             for transceiver in pc.transceivers {
                 let track = transceiver.receiver.track
                 log.info("[\(self.streamName)] Transceiver: kind=\(track?.kind ?? "nil") readyState=\(track?.readyState.rawValue ?? -1)")
                 if let videoTrack = track as? RTCVideoTrack {
-                    log.info("[\(self.streamName)] Found video track from transceiver, isEnabled=\(videoTrack.isEnabled)")
+                    log.info("[\(self.streamName)] Found video track, isEnabled=\(videoTrack.isEnabled)")
                     videoTrack.isEnabled = true
                     self.videoTrack = videoTrack
+                } else if let audioTrack = track as? RTCAudioTrack {
+                    log.info("[\(self.streamName)] Found audio track, setting isEnabled=\(self.isAudioEnabled)")
+                    audioTrack.isEnabled = self.isAudioEnabled
+                    self.audioTrack = audioTrack
                 }
             }
 
@@ -145,6 +154,7 @@ final class WebRTCClient: NSObject, ObservableObject {
         peerConnection?.close()
         peerConnection = nil
         videoTrack = nil
+        audioTrack = nil
     }
 
     func disconnect() {
@@ -210,6 +220,11 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
             if let track = stream.videoTracks.first {
                 log.info("[\(self.streamName)] Video track assigned")
                 self.videoTrack = track
+            }
+            if let track = stream.audioTracks.first {
+                log.info("[\(self.streamName)] Audio track assigned, isEnabled=\(self.isAudioEnabled)")
+                track.isEnabled = self.isAudioEnabled
+                self.audioTrack = track
             }
         }
     }
