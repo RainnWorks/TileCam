@@ -91,6 +91,22 @@ final class WatchSessionManager: NSObject, ObservableObject {
         subscribe(to: stream, mode: mode)
     }
 
+    func sendViewport(zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
+        guard let session, session.isReachable else { return }
+        session.sendMessage(
+            [
+                "request": "viewport",
+                "zoom": Double(zoom),
+                "centerX": Double(centerX),
+                "centerY": Double(centerY)
+            ],
+            replyHandler: nil,
+            errorHandler: { error in
+                log.error("Viewport update failed: \(error)")
+            }
+        )
+    }
+
     func unsubscribe() {
         let wasSubscribed = subscribedStream != nil
         subscribedStream = nil

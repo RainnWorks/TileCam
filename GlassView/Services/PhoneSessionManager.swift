@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import UIKit
 import os
 
 private let log = Logger(subsystem: "works.rainn.tilecam", category: "WatchSession")
@@ -32,6 +33,11 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     private var currentMode: WatchStreamMode = .videoAndAudio
     private var snapshotTask: Task<Void, Never>?
     private var audioTask: Task<Void, Never>?
+
+    /// Current viewport from Watch: zoom level and normalized center (0-1)
+    private var viewportZoom: CGFloat = 1.0
+    private var viewportCenterX: CGFloat = 0.5
+    private var viewportCenterY: CGFloat = 0.5
 
     override init() {
         super.init()
@@ -94,6 +100,9 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         audioTask?.cancel()
         audioTask = nil
         watchedStreamName = nil
+        viewportZoom = 1.0
+        viewportCenterX = 0.5
+        viewportCenterY = 0.5
     }
 
     // MARK: - Video: MJPEG stream from /api/stream.mjpeg
@@ -125,7 +134,8 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                     } else {
                         // Look for JPEG EOI marker
                         if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
-                            await self?.sendTaggedData(tag: .videoFrame, payload: buffer)
+                            let frame = await self?.cropFrameToViewport(buffer) ?? buffer
+                            await self?.sendTaggedData(tag: .videoFrame, payload: frame)
                             buffer.removeAll(keepingCapacity: true)
                             inFrame = false
                         }
@@ -134,7 +144,6 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             } catch {
                 if !Task.isCancelled {
                     log.error("MJPEG stream failed: \(error)")
-                    // Fallback to polling
                     await self?.startSnapshotPolling(service: service, streamName: streamName)
                 }
             }
@@ -146,7 +155,8 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         snapshotTask = Task {
             while !Task.isCancelled {
                 do {
-                    let jpegData = try await service.fetchFrame(streamName: streamName)
+                    var jpegData = try await service.fetchFrame(streamName: streamName)
+                    jpegData = cropFrameToViewport(jpegData)
                     sendTaggedData(tag: .videoFrame, payload: jpegData)
                 } catch {
                     if !Task.isCancelled {
@@ -156,6 +166,52 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
+    }
+
+    // MARK: - Viewport Cropping
+
+    private func updateViewport(zoom: CGFloat, centerX: CGFloat, centerY: CGFloat) {
+        viewportZoom = max(1.0, zoom)
+        viewportCenterX = min(max(centerX, 0), 1)
+        viewportCenterY = min(max(centerY, 0), 1)
+        log.info("Viewport updated: zoom=\(zoom) center=(\(centerX), \(centerY))")
+    }
+
+    /// Crops a JPEG frame to the current Watch viewport.
+    /// At zoom=1, returns the original frame unchanged.
+    /// At zoom=2, returns the center 50% crop at full pixel density.
+    private func cropFrameToViewport(_ jpegData: Data) -> Data {
+        guard viewportZoom > 1.01 else { return jpegData }
+
+        guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return jpegData
+        }
+
+        let imgW = CGFloat(cgImage.width)
+        let imgH = CGFloat(cgImage.height)
+
+        // Crop dimensions based on zoom
+        let cropW = imgW / viewportZoom
+        let cropH = imgH / viewportZoom
+
+        // Center position in pixel coordinates
+        let cropX = (viewportCenterX * imgW) - (cropW / 2)
+        let cropY = (viewportCenterY * imgH) - (cropH / 2)
+
+        // Clamp to image bounds
+        let clampedX = min(max(cropX, 0), imgW - cropW)
+        let clampedY = min(max(cropY, 0), imgH - cropH)
+
+        let cropRect = CGRect(x: clampedX, y: clampedY, width: cropW, height: cropH)
+
+        guard let cropped = cgImage.cropping(to: cropRect) else {
+            return jpegData
+        }
+
+        // Re-encode as JPEG
+        let uiImage = UIImage(cgImage: cropped)
+        return uiImage.jpegData(compressionQuality: 0.6) ?? jpegData
     }
 
     // MARK: - Audio: Stream /api/stream.mp3
@@ -257,6 +313,11 @@ extension PhoneSessionManager: WCSessionDelegate {
                 }
             case "unsubscribe":
                 self.unsubscribeFromStream()
+            case "viewport":
+                let zoom = message["zoom"] as? Double ?? 1.0
+                let cx = message["centerX"] as? Double ?? 0.5
+                let cy = message["centerY"] as? Double ?? 0.5
+                self.updateViewport(zoom: zoom, centerX: cx, centerY: cy)
             default:
                 break
             }
