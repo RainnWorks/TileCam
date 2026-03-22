@@ -162,15 +162,17 @@ struct StreamTileView: View {
 
     @ViewBuilder
     private var audioIndicator: some View {
-        if isStreamAudible {
+        if client.audioTrack != nil {
             GeometryReader { geo in
                 let insets = geo.safeAreaInsets
-                AudioWaveformIndicator()
-                    .padding(.top, max(6, insets.top + 2))
-                    .padding(.trailing, max(6, insets.trailing + 2))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                AudioWaveformIndicator(
+                    level: client.audioLevel,
+                    isMuted: !appState.isStreamAudioEnabled(stream.name)
+                )
+                .padding(.top, max(8, insets.top + 4))
+                .padding(.leading, max(8, insets.leading + 4))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.8)))
             .allowsHitTesting(false)
         }
     }

@@ -19,6 +19,7 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     @Published var videoTrack: RTCVideoTrack?
     @Published var audioTrack: RTCAudioTrack?
+    @Published var audioLevel: Float = 0
     @Published var connectionState: RTCIceConnectionState = .new
     @Published var error: String?
     @Published var isRetrying = false
@@ -29,6 +30,7 @@ final class WebRTCClient: NSObject, ObservableObject {
     }
 
     private var retryTask: Task<Void, Never>?
+    private var audioLevelTimer: Task<Void, Never>?
     private var isManuallyDisconnected = false
 
     private static let maxRetryDelay: TimeInterval = 30
@@ -135,6 +137,7 @@ final class WebRTCClient: NSObject, ObservableObject {
                     log.info("[\(self.streamName)] Found audio track, setting isEnabled=\(self.isAudioEnabled)")
                     audioTrack.isEnabled = self.isAudioEnabled
                     self.audioTrack = audioTrack
+                    startAudioLevelPolling()
                 }
             }
 
@@ -149,18 +152,47 @@ final class WebRTCClient: NSObject, ObservableObject {
         }
     }
 
+    private func startAudioLevelPolling() {
+        audioLevelTimer?.cancel()
+        audioLevelTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard let self, !Task.isCancelled, let pc = self.peerConnection else { continue }
+                pc.statistics { report in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        var maxLevel: Float = 0
+                        for (_, stats) in report.statistics {
+                            if stats.type == "inbound-rtp",
+                               stats.values["kind"] as? String == "audio",
+                               let level = stats.values["audioLevel"] as? Double {
+                                maxLevel = max(maxLevel, Float(level))
+                            }
+                        }
+                        self.audioLevel = maxLevel
+                    }
+                }
+            }
+        }
+    }
+
     private func tearDownPeerConnection() {
+        audioLevelTimer?.cancel()
+        audioLevelTimer = nil
         peerConnection?.delegate = nil
         peerConnection?.close()
         peerConnection = nil
         videoTrack = nil
         audioTrack = nil
+        audioLevel = 0
     }
 
     func disconnect() {
         isManuallyDisconnected = true
         retryTask?.cancel()
         retryTask = nil
+        audioLevelTimer?.cancel()
+        audioLevelTimer = nil
         isRetrying = false
         retryCount = 0
         tearDownPeerConnection()
