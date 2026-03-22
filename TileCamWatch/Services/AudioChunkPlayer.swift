@@ -130,17 +130,22 @@ final class AudioChunkPlayer: ObservableObject {
 
     // MARK: - Cleanup
 
+    private var lastCleanedIndex = 0
+
     private func cleanupOldChunks() {
         let keepAfter = max(0, chunkIndex - 5)
-        for i in 0..<keepAfter {
+        guard keepAfter > lastCleanedIndex else { return }
+        for i in lastCleanedIndex..<keepAfter {
             let url = tempDir.appendingPathComponent("chunk_\(i).mp3")
             try? FileManager.default.removeItem(at: url)
         }
+        lastCleanedIndex = keepAfter
     }
 
     private func cleanupTempFiles() {
         try? FileManager.default.removeItem(at: tempDir)
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         chunkIndex = 0
+        lastCleanedIndex = 0
     }
 }

@@ -89,7 +89,7 @@ struct CameraSnapshotView: View {
         } else {
             VStack(spacing: 8) {
                 ProgressView()
-                Text("Connecting...")
+                Text(session.isSubscribing ? "Connecting..." : "Waiting for frames...")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

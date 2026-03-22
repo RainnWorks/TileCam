@@ -46,7 +46,10 @@ final class WatchSessionManager: NSObject, ObservableObject {
     /// Includes initial viewport (zoom, centerX, centerY).
     @Published var pushedCamera: PushedCamera?
 
-    struct PushedCamera {
+    /// True while waiting for subscribe confirmation from iPhone.
+    @Published var isSubscribing = false
+
+    struct PushedCamera: Equatable {
         let streamName: String
         let zoom: CGFloat
         let centerX: CGFloat
@@ -56,6 +59,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
     let audioPlayer = AudioChunkPlayer()
 
     private var session: WCSession?
+    private var subscribeRetryTask: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -67,15 +71,35 @@ final class WatchSessionManager: NSObject, ObservableObject {
     }
 
     func subscribe(to streamName: String, mode: StreamMode, zoom: CGFloat = 1.0, centerX: CGFloat = 0.5, centerY: CGFloat = 0.5) {
+        subscribeRetryTask?.cancel()
+        subscribeRetryTask = nil
+
         subscribedStream = streamName
         currentMode = mode
         latestSnapshot = nil
+        isSubscribing = true
 
         if mode != .videoOnly {
             audioPlayer.start()
         }
 
-        guard let session, session.isReachable else { return }
+        sendSubscribe(streamName: streamName, mode: mode, zoom: zoom, centerX: centerX, centerY: centerY, attempt: 1)
+    }
+
+    /// Sends the subscribe message with a reply handler for confirmation.
+    /// Retries up to 3 times with exponential backoff on failure/timeout.
+    private func sendSubscribe(streamName: String, mode: StreamMode, zoom: CGFloat, centerX: CGFloat, centerY: CGFloat, attempt: Int) {
+        guard let session, session.isReachable else {
+            // Phone not reachable — schedule retry
+            if attempt <= 3 {
+                scheduleRetry(streamName: streamName, mode: mode, zoom: zoom, centerX: centerX, centerY: centerY, attempt: attempt)
+            } else {
+                log.error("Subscribe failed after \(attempt) attempts — phone not reachable")
+                isSubscribing = false
+            }
+            return
+        }
+
         session.sendMessage(
             [
                 "request": "subscribe",
@@ -85,11 +109,48 @@ final class WatchSessionManager: NSObject, ObservableObject {
                 "centerX": Double(centerX),
                 "centerY": Double(centerY)
             ],
-            replyHandler: nil,
-            errorHandler: { error in
-                log.error("Subscribe failed: \(error)")
+            replyHandler: { [weak self] reply in
+                Task { @MainActor in
+                    guard let self, self.subscribedStream == streamName else { return }
+                    if reply["status"] as? String == "ok" {
+                        log.info("Subscribe confirmed for \(streamName)")
+                        self.isSubscribing = false
+                    }
+                }
+            },
+            errorHandler: { [weak self] error in
+                log.error("Subscribe send failed: \(error)")
+                Task { @MainActor in
+                    guard let self, self.subscribedStream == streamName else { return }
+                    if attempt <= 3 {
+                        self.scheduleRetry(streamName: streamName, mode: mode, zoom: zoom, centerX: centerX, centerY: centerY, attempt: attempt)
+                    } else {
+                        self.isSubscribing = false
+                    }
+                }
             }
         )
+
+        // Timeout: if no reply within 5 seconds, retry
+        subscribeRetryTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, subscribedStream == streamName, isSubscribing else { return }
+            log.warning("Subscribe timeout for \(streamName), attempt \(attempt)")
+            if attempt <= 3 {
+                sendSubscribe(streamName: streamName, mode: mode, zoom: zoom, centerX: centerX, centerY: centerY, attempt: attempt + 1)
+            } else {
+                isSubscribing = false
+            }
+        }
+    }
+
+    private func scheduleRetry(streamName: String, mode: StreamMode, zoom: CGFloat, centerX: CGFloat, centerY: CGFloat, attempt: Int) {
+        let delay = UInt64(pow(2.0, Double(attempt))) // 2s, 4s, 8s
+        subscribeRetryTask = Task {
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, subscribedStream == streamName else { return }
+            sendSubscribe(streamName: streamName, mode: mode, zoom: zoom, centerX: centerX, centerY: centerY, attempt: attempt + 1)
+        }
     }
 
     func changeMode(_ mode: StreamMode) {
@@ -119,9 +180,13 @@ final class WatchSessionManager: NSObject, ObservableObject {
     }
 
     func unsubscribe() {
+        subscribeRetryTask?.cancel()
+        subscribeRetryTask = nil
+
         let wasSubscribed = subscribedStream != nil
         subscribedStream = nil
         latestSnapshot = nil
+        isSubscribing = false
         audioPlayer.stop()
 
         guard wasSubscribed, let session, session.isReachable else { return }

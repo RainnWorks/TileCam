@@ -18,6 +18,12 @@ enum WatchStreamMode: String {
     case audioOnly
 }
 
+/// Max payload size for WCSession sendMessageData (~62KB leaves headroom under the ~65KB limit).
+private let maxWCMessageSize = 62_000
+
+/// MJPEG frame buffer cap — drop malformed frames that never terminate.
+private let maxFrameBufferSize = 512_000
+
 /// Manages WatchConnectivity on the iPhone side.
 /// Streams JPEG snapshots and MP3 audio from go2rtc HTTP endpoints to the Watch.
 /// The Watch controls its own viewport; iPhone just crops frames to match.
@@ -35,10 +41,21 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     private var snapshotTask: Task<Void, Never>?
     private var audioTask: Task<Void, Never>?
 
+    /// Guards against zombie poller — incremented on each subscribe/unsubscribe cycle.
+    private var streamGeneration: UInt64 = 0
+
     /// Current viewport from Watch, used for cropping MJPEG frames.
     private var viewportZoom: CGFloat = 1.0
     private var viewportCenterX: CGFloat = 0.5
     private var viewportCenterY: CGFloat = 0.5
+
+    /// Backpressure: true while a sendMessageData call is in-flight for video.
+    private var videoSendInFlight = false
+
+    /// URLSession used for the current MJPEG stream — invalidated on unsubscribe.
+    private var mjpegSession: URLSession?
+    /// URLSession used for the current audio stream — invalidated on unsubscribe.
+    private var audioStreamSession: URLSession?
 
     override init() {
         super.init()
@@ -83,10 +100,11 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     private func subscribeToStream(_ streamName: String, mode: WatchStreamMode, viewport: (CGFloat, CGFloat, CGFloat)?) {
         log.info("Watch subscribing to: \(streamName) mode: \(mode.rawValue)")
         unsubscribeFromStream()
+
+        streamGeneration &+= 1
         watchedStreamName = streamName
         currentMode = mode
 
-        // Apply initial viewport if provided
         if let (z, cx, cy) = viewport {
             viewportZoom = z
             viewportCenterX = cx
@@ -107,6 +125,7 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     }
 
     private func unsubscribeFromStream() {
+        streamGeneration &+= 1
         snapshotTask?.cancel()
         snapshotTask = nil
         audioTask?.cancel()
@@ -115,15 +134,24 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         viewportZoom = 1.0
         viewportCenterX = 0.5
         viewportCenterY = 0.5
+        videoSendInFlight = false
+
+        // Invalidate URLSessions to prevent leaked connections
+        mjpegSession?.invalidateAndCancel()
+        mjpegSession = nil
+        audioStreamSession?.invalidateAndCancel()
+        audioStreamSession = nil
     }
 
     // MARK: - Video: MJPEG stream from /api/stream.mjpeg
 
     private func startVideoStreaming(service: Go2RTCService, streamName: String) {
+        let generation = streamGeneration
         snapshotTask = Task.detached { [weak self] in
             do {
-                let (url, session) = try service.openMJPEGStream(streamName: streamName)
-                let (bytes, _) = try await session.bytes(from: url)
+                let (url, urlSession) = try service.openMJPEGStream(streamName: streamName)
+                await MainActor.run { self?.mjpegSession = urlSession }
+                let (bytes, _) = try await urlSession.bytes(from: url)
 
                 var buffer = Data()
                 let jpegStart = Data([0xFF, 0xD8])
@@ -142,9 +170,28 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                             buffer.removeAll(keepingCapacity: true)
                         }
                     } else {
+                        // Fix #3: Cap buffer size to prevent unbounded growth on malformed frames
+                        if buffer.count > maxFrameBufferSize {
+                            log.warning("MJPEG frame buffer exceeded \(maxFrameBufferSize) bytes, dropping")
+                            buffer.removeAll(keepingCapacity: true)
+                            inFrame = false
+                            continue
+                        }
+
                         if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
                             let frame = await self?.cropFrameToViewport(buffer) ?? buffer
-                            await self?.sendTaggedData(tag: .videoFrame, payload: frame)
+                            // Fix #1: Ensure frame fits WCSession size limit
+                            let sizedFrame = await self?.ensureFrameFits(frame) ?? frame
+                            // Fix #4: Skip frame if previous send still in-flight (backpressure)
+                            let shouldSend = await MainActor.run { () -> Bool in
+                                guard let self else { return false }
+                                if self.videoSendInFlight { return false }
+                                self.videoSendInFlight = true
+                                return true
+                            }
+                            if shouldSend {
+                                await self?.sendVideoFrame(sizedFrame)
+                            }
                             buffer.removeAll(keepingCapacity: true)
                             inFrame = false
                         }
@@ -153,19 +200,33 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             } catch {
                 if !Task.isCancelled {
                     log.error("MJPEG stream failed: \(error)")
-                    await self?.startSnapshotPolling(service: service, streamName: streamName)
+                    // Fix #3: Check generation to prevent zombie poller
+                    await self?.fallbackToPollingIfStillActive(
+                        service: service, streamName: streamName, generation: generation
+                    )
                 }
             }
         }
     }
 
+    /// Only starts polling if we're still on the same subscribe generation.
+    private func fallbackToPollingIfStillActive(service: Go2RTCService, streamName: String, generation: UInt64) {
+        guard generation == self.streamGeneration, watchedStreamName == streamName else {
+            log.info("Skipping polling fallback — stream generation changed")
+            return
+        }
+        startSnapshotPolling(service: service, streamName: streamName)
+    }
+
     private func startSnapshotPolling(service: Go2RTCService, streamName: String) {
+        let generation = streamGeneration
         snapshotTask = Task {
-            while !Task.isCancelled {
+            while !Task.isCancelled && generation == streamGeneration {
                 do {
                     var jpegData = try await service.fetchFrame(streamName: streamName)
                     jpegData = cropFrameToViewport(jpegData)
-                    sendTaggedData(tag: .videoFrame, payload: jpegData)
+                    let sizedFrame = ensureFrameFits(jpegData)
+                    sendVideoFrame(sizedFrame)
                 } catch {
                     if !Task.isCancelled {
                         log.error("Snapshot fetch failed: \(error)")
@@ -174,6 +235,37 @@ final class PhoneSessionManager: NSObject, ObservableObject {
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
+    }
+
+    // MARK: - Frame Size Gate (Fix #1)
+
+    /// Re-encodes at progressively lower quality until the frame fits under the WCSession limit.
+    private func ensureFrameFits(_ jpegData: Data) -> Data {
+        guard jpegData.count > maxWCMessageSize else { return jpegData }
+
+        // Try decreasing quality levels
+        guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return jpegData
+        }
+
+        let uiImage = UIImage(cgImage: cgImage)
+        for quality in [0.4, 0.25, 0.15, 0.08] as [CGFloat] {
+            if let reencoded = uiImage.jpegData(compressionQuality: quality),
+               reencoded.count <= maxWCMessageSize {
+                return reencoded
+            }
+        }
+
+        // Last resort: scale down the image
+        let scale = sqrt(Double(maxWCMessageSize) / Double(jpegData.count))
+        let newSize = CGSize(
+            width: CGFloat(cgImage.width) * scale,
+            height: CGFloat(cgImage.height) * scale
+        )
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let scaled = renderer.image { _ in uiImage.draw(in: CGRect(origin: .zero, size: newSize)) }
+        return scaled.jpegData(compressionQuality: 0.3) ?? jpegData
     }
 
     // MARK: - Viewport Cropping
@@ -204,23 +296,34 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         return uiImage.jpegData(compressionQuality: 0.6) ?? jpegData
     }
 
-    // MARK: - Audio: Stream /api/stream.mp3
+    // MARK: - Audio: Stream /api/stream.mp3 (Fix #5: MP3 frame-aligned chunking)
 
     private func startAudioStreaming(service: Go2RTCService, streamName: String) {
         audioTask = Task.detached { [weak self] in
             do {
                 let (url, streamSession) = try service.openAudioStream(streamName: streamName)
+                await MainActor.run { self?.audioStreamSession = streamSession }
                 let (bytes, _) = try await streamSession.bytes(from: url)
 
                 var buffer = Data()
-                let chunkSize = 4096
 
                 for try await byte in bytes {
                     if Task.isCancelled { break }
                     buffer.append(byte)
-                    if buffer.count >= chunkSize {
-                        await self?.sendTaggedData(tag: .audioChunk, payload: buffer)
-                        buffer.removeAll(keepingCapacity: true)
+
+                    // Accumulate until we have enough data, then split on MP3 frame boundaries
+                    if buffer.count >= 4096 {
+                        let splitPoint = Self.findLastMP3FrameBoundary(in: buffer)
+                        let chunk: Data
+                        if splitPoint > 0 {
+                            chunk = buffer.prefix(splitPoint)
+                            buffer = Data(buffer.suffix(from: splitPoint))
+                        } else {
+                            // No sync word found — send what we have (degenerate case)
+                            chunk = buffer
+                            buffer = Data()
+                        }
+                        await self?.sendTaggedData(tag: .audioChunk, payload: chunk)
                     }
                 }
             } catch {
@@ -231,14 +334,50 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
+    /// Finds the last MP3 sync word (0xFF 0xE0+) boundary in the buffer.
+    /// Returns the byte offset of the last sync word, or 0 if none found.
+    private static func findLastMP3FrameBoundary(in data: Data) -> Int {
+        guard data.count > 2 else { return 0 }
+        // Scan backwards for an MP3 sync word: 0xFF followed by 0xE0-0xFF (11 sync bits)
+        for i in stride(from: data.count - 2, through: 1, by: -1) {
+            if data[data.startIndex + i] == 0xFF && (data[data.startIndex + i + 1] & 0xE0) == 0xE0 {
+                return i
+            }
+        }
+        return 0
+    }
+
     // MARK: - Send to Watch
+
+    /// Sends a video frame with backpressure tracking.
+    private func sendVideoFrame(_ payload: Data) {
+        guard WCSession.default.isReachable else {
+            videoSendInFlight = false
+            return
+        }
+        var message = Data(capacity: 1 + payload.count)
+        message.append(WatchDataTag.videoFrame.rawValue)
+        message.append(payload)
+        WCSession.default.sendMessageData(message, replyHandler: { [weak self] _ in
+            Task { @MainActor in self?.videoSendInFlight = false }
+        }, errorHandler: { [weak self] error in
+            log.error("Video send failed: \(error)")
+            Task { @MainActor in self?.videoSendInFlight = false }
+        })
+    }
 
     private func sendTaggedData(tag: WatchDataTag, payload: Data) {
         guard WCSession.default.isReachable else { return }
+        guard payload.count + 1 <= maxWCMessageSize else {
+            log.warning("Audio chunk too large (\(payload.count) bytes), dropping")
+            return
+        }
         var message = Data(capacity: 1 + payload.count)
         message.append(tag.rawValue)
         message.append(payload)
-        WCSession.default.sendMessageData(message, replyHandler: nil, errorHandler: nil)
+        WCSession.default.sendMessageData(message, replyHandler: nil, errorHandler: { error in
+            log.error("sendMessageData failed: \(error)")
+        })
     }
 }
 
@@ -298,7 +437,6 @@ extension PhoneSessionManager: WCSessionDelegate {
                 if let name = message["streamName"] as? String {
                     let modeStr = message["mode"] as? String ?? "videoAndAudio"
                     let mode = WatchStreamMode(rawValue: modeStr) ?? .videoAndAudio
-                    // Watch may include initial viewport from "showCamera"
                     var viewport: (CGFloat, CGFloat, CGFloat)?
                     if let z = message["zoom"] as? Double {
                         let cx = message["centerX"] as? Double ?? 0.5
@@ -310,7 +448,6 @@ extension PhoneSessionManager: WCSessionDelegate {
             case "unsubscribe":
                 self.unsubscribeFromStream()
             case "viewport":
-                // Watch-originated viewport update (for cropping only)
                 let zoom = message["zoom"] as? Double ?? 1.0
                 let cx = message["centerX"] as? Double ?? 0.5
                 let cy = message["centerY"] as? Double ?? 0.5
