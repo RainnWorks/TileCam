@@ -22,6 +22,21 @@ final class WebRTCFactory: @unchecked Sendable {
         }
     }
 
+    /// Recover the shared playout engine after returning to the foreground.
+    /// `playbackDevice` is eagerly constructed, so this always acts on a real
+    /// device; the recovery itself is idempotent.
+    func resumePlayout() {
+        playbackDevice.resumePlayoutIfNeeded()
+    }
+
+    /// Stop the shared playout engine and deactivate the audio session so iOS
+    /// can suspend the app on background. Call when background audio is not
+    /// wanted (no opt-in toggle, no genuine PiP window). `playbackDevice` is
+    /// eagerly constructed, so this always acts on a real device.
+    func suspendPlayout() {
+        playbackDevice.suspendPlayout()
+    }
+
     private func _init() {
         RTCInitializeSSL()
         _factory = RTCPeerConnectionFactory(
