@@ -36,6 +36,7 @@ struct StreamTileView: View {
     @State private var contentSize: CGSize = .zero
     @State private var showRecoveryFlash = false
     @State private var wasDisconnected = false
+    @State private var motionMode: MotionVisualizationMode = .off
 
     /// Track Watch button usage for discoverability (show label for first 3 sends)
     @AppStorage("watchSendCount") private var watchSendCount: Int = 0
@@ -64,6 +65,7 @@ struct StreamTileView: View {
             statusOverlay
             recoveryFlashBorder
             audioIndicator
+            motionToggle
 
             if showUI {
                 bottomBar
@@ -80,7 +82,9 @@ struct StreamTileView: View {
         .accessibilityLabel("Stream: \(stream.name.replacingOccurrences(of: "_", with: " "))")
         .accessibilityValue(isStreamAudible ? "Audio on" : "Audio muted")
         .animation(.smooth(duration: 0.4), value: client.videoTrack != nil)
+        .animation(.smooth(duration: 0.4), value: client.videoReady)
         .animation(.smooth(duration: 0.25), value: isStreamAudible)
+        .animation(.smooth(duration: 0.25), value: client.audioUnavailable)
         .onChange(of: client.connectionState) { _, newState in
             if newState == .failed || newState == .disconnected {
                 wasDisconnected = true
@@ -97,9 +101,14 @@ struct StreamTileView: View {
         .onChange(of: appState.mutedStreamNames) { _, _ in syncAudioState() }
         .onChange(of: client.audioTrack) { _, _ in syncAudioState() }
         .task {
+            appState.activeClients[stream.name] = client
+            appState.activeTransforms[stream.name] = transform
             await client.connect()
         }
         .onDisappear {
+            appState.activeClients.removeValue(forKey: stream.name)
+            appState.activeTransforms.removeValue(forKey: stream.name)
+            appState.activeContentSizes.removeValue(forKey: stream.name)
             client.disconnect()
         }
     }
@@ -109,32 +118,52 @@ struct StreamTileView: View {
     @ViewBuilder
     private var videoLayer: some View {
         if let videoTrack = client.videoTrack {
-            WebRTCVideoView(videoTrack: videoTrack)
-                .background(alignment: .topLeading) {
-                    GeometryReader { proxy in
-                        Color.clear
-                            .onAppear { contentSize = proxy.size }
-                            .onChange(of: proxy.size) { _, newSize in
-                                contentSize = newSize
-                            }
-                    }
+            ZStack {
+                WebRTCVideoView(videoTrack: videoTrack) {
+                    client.markVideoReady()
                 }
-                .scaleEffect(
-                    x: transform.scaleX,
-                    y: transform.scaleY,
-                    anchor: .zero
-                )
-                .offset(x: transform.tx, y: transform.ty)
-                .gesture(
-                    SimultaneousGesture(magnifyGesture, dragGesture)
-                )
-                .gesture(doubleTapGesture)
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 1.02)),
-                        removal: .opacity
+
+                if motionMode != .off {
+                    let (z, cx, cy) = currentNormalizedViewport()
+                    MotionVisualizationView(
+                        videoTrack: videoTrack,
+                        mode: motionMode,
+                        viewport: MotionViewport(zoom: z, centerX: cx, centerY: cy)
                     )
+                    .allowsHitTesting(false)
+                }
+            }
+            .background(alignment: .topLeading) {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear {
+                            contentSize = proxy.size
+                            appState.activeContentSizes[stream.name] = proxy.size
+                            refreshPiPViewport()
+                        }
+                        .onChange(of: proxy.size) { _, newSize in
+                            contentSize = newSize
+                            appState.activeContentSizes[stream.name] = newSize
+                            refreshPiPViewport()
+                        }
+                }
+            }
+            .scaleEffect(
+                x: transform.scaleX,
+                y: transform.scaleY,
+                anchor: .zero
+            )
+            .offset(x: transform.tx, y: transform.ty)
+            .gesture(
+                SimultaneousGesture(magnifyGesture, dragGesture)
+            )
+            .gesture(doubleTapGesture)
+            .transition(
+                .asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 1.02)),
+                    removal: .opacity
                 )
+            )
         }
     }
 
@@ -142,7 +171,12 @@ struct StreamTileView: View {
     private var statusOverlay: some View {
         switch client.connectionState {
         case .connected, .completed:
-            EmptyView()
+            // ICE is up, but keep the spinner until a real frame actually
+            // renders — "ICE connected" does not mean media is flowing.
+            if !client.videoReady {
+                connectingOverlay
+                    .transition(.opacity)
+            }
         case .failed:
             failedOverlay
         case .disconnected:
@@ -164,18 +198,56 @@ struct StreamTileView: View {
     }
 
     @ViewBuilder
-    private var audioIndicator: some View {
-        if client.audioTrack != nil {
+    private var motionToggle: some View {
+        if showUI {
             let insets = Self.windowSafeArea
-            AudioWaveformIndicator(
-                level: client.audioLevel,
-                isMuted: !appState.isStreamAudioEnabled(stream.name)
-            )
-            .padding(.top, max(8, insets.top + 4))
-            .padding(.leading, max(8, insets.left + 4))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .allowsHitTesting(false)
+            Button {
+                withAnimation(.smooth(duration: 0.2)) {
+                    motionMode = motionMode.next
+                }
+                zoomHaptic.impactOccurred()
+            } label: {
+                Image(systemName: motionMode.icon)
+                    .font(.body)
+                    .foregroundStyle(motionMode == .off ? .white : .cyan)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .liquidGlassCircle()
+            .contentShape(Rectangle())
+            .padding(.bottom, max(8, insets.bottom + 4))
+            .padding(.trailing, max(8, insets.right + 4))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .accessibilityLabel("Motion visualization: \(motionMode.label)")
+            .transition(.opacity)
         }
+    }
+
+    @ViewBuilder
+    private var audioIndicator: some View {
+        let insets = Self.windowSafeArea
+        Group {
+            if client.audioTrack != nil {
+                AudioWaveformIndicator(
+                    level: client.audioLevel,
+                    isMuted: !appState.isStreamAudioEnabled(stream.name)
+                )
+            } else if client.audioUnavailable {
+                // Stream negotiated without a usable audio track. A small,
+                // unobtrusive marker so the absence is explained rather than silent.
+                Image(systemName: "speaker.slash.fill")
+                    .font(.system(size: 10))
+                    // Match the AudioWaveformIndicator slot so the indicator
+                    // box doesn't jitter when audio drops.
+                    .frame(width: 12, height: 10)
+                    .foregroundStyle(.orange.opacity(0.6))
+                    .transition(.opacity)
+                    .accessibilityLabel("Audio unavailable")
+            }
+        }
+        .padding(.top, max(8, insets.top + 4))
+        .padding(.leading, max(8, insets.left + 4))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
     }
 
     private static var windowSafeArea: UIEdgeInsets {
@@ -378,6 +450,10 @@ struct StreamTileView: View {
             panY: Double(transform.ty)
         )
         LayoutStore.saveViewState(state, for: stream.name)
+        appState.activeTransforms[stream.name] = transform
+        appState.activeContentSizes[stream.name] = contentSize
+        let (z, cx, cy) = currentNormalizedViewport()
+        PiPManager.shared.updateViewport(streamName: stream.name, zoom: z, centerX: cx, centerY: cy)
     }
 
     /// Returns the current zoom/pan as a normalized viewport (zoom, centerX, centerY).
@@ -389,6 +465,31 @@ struct StreamTileView: View {
         let centerX = (contentSize.width / 2.0 - transform.tx) / (contentSize.width * zoom)
         let centerY = (contentSize.height / 2.0 - transform.ty) / (contentSize.height * zoom)
         return (zoom, centerX, centerY)
+    }
+
+    private func refreshPiPViewport() {
+        guard contentSize.width > 0, contentSize.height > 0, PiPManager.shared.isActive else { return }
+        let (z, cx, cy) = currentNormalizedViewport()
+        PiPManager.shared.updateViewport(streamName: stream.name, zoom: z, centerX: cx, centerY: cy)
+    }
+
+    // MARK: - PiP Viewports
+
+    /// Builds normalized viewport dict from current transforms and content sizes.
+    static func buildViewports(appState: AppState) -> [String: (CGFloat, CGFloat, CGFloat)] {
+        var viewports: [String: (CGFloat, CGFloat, CGFloat)] = [:]
+        for (name, t) in appState.activeTransforms {
+            let cs = appState.activeContentSizes[name] ?? .zero
+            if cs.width > 0 && cs.height > 0 {
+                let zoom = t.scaleX
+                let cx = (cs.width / 2.0 - t.tx) / (cs.width * zoom)
+                let cy = (cs.height / 2.0 - t.ty) / (cs.height * zoom)
+                viewports[name] = (zoom, cx, cy)
+            } else {
+                viewports[name] = (t.scaleX, 0.5, 0.5)
+            }
+        }
+        return viewports
     }
 
     // MARK: - Audio
@@ -493,21 +594,26 @@ struct StreamTileView: View {
 
 struct WebRTCVideoView: UIViewRepresentable {
     let videoTrack: RTCVideoTrack
+    /// Called when the underlying view reports its first real video size,
+    /// i.e. a decoded frame has actually rendered.
+    let onFirstFrame: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(onFirstFrame: onFirstFrame)
     }
 
     func makeUIView(context: Context) -> RTCMTLVideoView {
         let view = RTCMTLVideoView()
         view.videoContentMode = .scaleAspectFit
         view.clipsToBounds = true
+        view.delegate = context.coordinator
         videoTrack.add(view)
         context.coordinator.currentTrack = videoTrack
         return view
     }
 
     func updateUIView(_ uiView: RTCMTLVideoView, context: Context) {
+        context.coordinator.onFirstFrame = onFirstFrame
         // Only re-add if the track actually changed
         if context.coordinator.currentTrack !== videoTrack {
             context.coordinator.currentTrack?.remove(uiView)
@@ -521,8 +627,22 @@ struct WebRTCVideoView: UIViewRepresentable {
         coordinator.currentTrack = nil
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject, RTCVideoViewDelegate {
         var currentTrack: RTCVideoTrack?
+        var onFirstFrame: () -> Void
+        private var didReportFrame = false
+
+        init(onFirstFrame: @escaping () -> Void) {
+            self.onFirstFrame = onFirstFrame
+        }
+
+        func videoView(_ videoView: RTCVideoRenderer, didChangeVideoSize size: CGSize) {
+            // didChangeVideoSize fires when actual decoded frames arrive.
+            guard !didReportFrame, size.width > 0, size.height > 0 else { return }
+            didReportFrame = true
+            let callback = onFirstFrame
+            Task { @MainActor in callback() }
+        }
     }
 }
 
