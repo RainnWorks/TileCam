@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var showUI = true
     @State private var showServerInput = false
     @State private var showWatchSettings = false
+    @State private var showSettings = false
     @State private var hideTimer: Task<Void, Never>?
     @State private var animateTokens = false
 
@@ -26,6 +27,17 @@ struct ContentView: View {
                     .environment(\.toggleUI, { [self] in toggleUI() })
                     .ignoresSafeArea()
                     .onTapGesture { toggleUI() }
+
+                // Video dimming overlay — sits above the feeds, below UI chrome.
+                // allowsHitTesting(false) so taps fall through to toggleUI.
+                if appState.videoDimmingEnabled {
+                    Color.black
+                        .opacity(appState.videoDimmingAmount)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .animation(.smooth(duration: 0.2), value: appState.videoDimmingAmount)
+                        .animation(.smooth(duration: 0.2), value: appState.videoDimmingEnabled)
+                }
 
                 // All UI fades in/out together
                 if showUI {
@@ -49,19 +61,44 @@ struct ContentView: View {
                             .liquidGlassCircle()
                             .contentShape(Rectangle())
                             .accessibilityLabel(appState.isGlobalAudioEnabled ? "Audio on" : "Audio muted")
-                            .accessibilityHint("Double-tap to toggle audio")
+                            .accessibilityHint("Toggle audio")
+
+                            Button {
+                                withAnimation(.smooth(duration: 0.25)) {
+                                    showSettings.toggle()
+                                    showServerInput = false
+                                    showWatchSettings = false
+                                }
+                                keepUIVisible()
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .font(.body)
+                                    .foregroundStyle(.white)
+                            }
+                            .liquidGlassCircle()
+                            .contentShape(Rectangle())
+                            .accessibilityLabel("Settings")
 
                             if phoneSession.isWatchReachable {
                                 Button {
                                     withAnimation(.smooth(duration: 0.25)) {
                                         showWatchSettings.toggle()
                                         showServerInput = false
+                                        showSettings = false
                                     }
                                     keepUIVisible()
                                 } label: {
-                                    Image(systemName: "applewatch")
-                                        .font(.body)
-                                        .foregroundStyle(.white)
+                                    ZStack(alignment: .topTrailing) {
+                                        Image(systemName: "applewatch")
+                                            .font(.body)
+                                            .foregroundStyle(.white)
+                                        if phoneSession.isWatchStreamDegraded {
+                                            Circle()
+                                                .fill(.orange)
+                                                .frame(width: 8, height: 8)
+                                                .offset(x: 2, y: -2)
+                                        }
+                                    }
                                 }
                                 .liquidGlassCircle()
                                 .contentShape(Rectangle())
@@ -72,6 +109,7 @@ struct ContentView: View {
                                 withAnimation {
                                     showServerInput.toggle()
                                     showWatchSettings = false
+                                    showSettings = false
                                 }
                                 keepUIVisible()
                             } label: {
@@ -119,23 +157,43 @@ struct ContentView: View {
                         watchSettingsPanel
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
+
+                    // Settings overlay
+                    if showSettings {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.smooth(duration: 0.25)) { showSettings = false }
+                            }
+
+                        settingsPanel
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    }
                 }
             }
         }
         .animation(.smooth(duration: 0.25), value: showUI)
         .animation(.smooth(duration: 0.25), value: showServerInput)
         .animation(.smooth(duration: 0.25), value: showWatchSettings)
+        .animation(.smooth(duration: 0.25), value: showSettings)
         .task {
             await appState.refreshStreams()
             scheduleAutoHide()
+            applyIdleTimer()
         }
+        .onChange(of: appState.selectedStreams) { _, _ in applyIdleTimer() }
+        .onChange(of: appState.serverURL) { _, _ in applyIdleTimer() }
+        .onChange(of: appState.keepScreenAwake) { _, _ in applyIdleTimer() }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         #if targetEnvironment(macCatalyst)
         .onKeyPress(.space) {
             toggleUI()
             return .handled
         }
         .onKeyPress(.escape) {
-            if showWatchSettings {
+            if showSettings {
+                withAnimation(.smooth(duration: 0.25)) { showSettings = false }
+            } else if showWatchSettings {
                 withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
             } else if showServerInput {
                 withAnimation { showServerInput = false }
@@ -165,8 +223,9 @@ struct ContentView: View {
             }
             return .handled
         }
-        .onKeyPress(characters: .decimalDigits, modifiers: .option) { press in
-            guard let digit = Int(press.characters), digit >= 1,
+        .onKeyPress(characters: .decimalDigits) { press in
+            guard press.modifiers.contains(.option),
+                  let digit = Int(press.characters), digit >= 1,
                   digit <= appState.availableStreams.count else {
                 return .ignored
             }
@@ -198,6 +257,11 @@ struct ContentView: View {
         scheduleAutoHide()
     }
 
+    private func applyIdleTimer() {
+        let streaming = !appState.serverURL.isEmpty && !appState.selectedStreams.isEmpty
+        UIApplication.shared.isIdleTimerDisabled = streaming && appState.keepScreenAwake
+    }
+
     private func scheduleAutoHide() {
         hideTimer?.cancel()
         // Don't auto-hide if no streams selected — user needs to see the UI
@@ -205,7 +269,7 @@ struct ContentView: View {
         hideTimer = Task {
             try? await Task.sleep(for: autoHideDelay)
             guard !Task.isCancelled else { return }
-            if !showServerInput && !showWatchSettings {
+            if !showServerInput && !showWatchSettings && !showSettings {
                 withAnimation(.smooth(duration: 0.4)) {
                     showUI = false
                 }
@@ -231,6 +295,15 @@ struct ContentView: View {
         )
     }
 
+    // MARK: - Settings Panel
+
+    private var settingsPanel: some View {
+        SettingsPanel(onDismiss: {
+            withAnimation(.smooth(duration: 0.25)) { showSettings = false }
+        })
+        .environmentObject(appState)
+    }
+
     // MARK: - Watch Settings Panel
 
     private var watchSettingsPanel: some View {
@@ -243,6 +316,7 @@ struct ContentView: View {
                 withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
             }
         )
+        .environmentObject(appState)
     }
 
     // MARK: - Stream Token Panel
@@ -266,34 +340,27 @@ struct ContentView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(isSelected ? .green : .white.opacity(0.2))
-                                .frame(width: isSelected ? 8 : 6, height: isSelected ? 8 : 6)
+                                .fill(isSelected ? .green : .white.opacity(0.35))
+                                .frame(width: 6, height: 6)
                                 .shadow(color: isSelected ? .green.opacity(0.4) : .clear, radius: isSelected ? 3 : 0)
-                                .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.6), value: isSelected)
 
                             Text(displayName)
-                                .font(.caption.weight(isSelected ? .semibold : .medium))
-                                .foregroundStyle(isSelected ? .white : .white.opacity(0.4))
+                                .font(.caption.weight(isSelected ? .semibold : .regular))
+                                .foregroundStyle(isSelected ? .white : .white.opacity(0.6))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .frame(minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(isSelected ? .white.opacity(0.2) : .clear)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(isSelected ? .clear : .white.opacity(0.1), lineWidth: 0.5)
-                                )
+                                .fill(isSelected ? .white.opacity(0.15) : .white.opacity(0.06))
                         )
                         .contentShape(Rectangle())
                     }
                     .accessibilityLabel(displayName)
                     .accessibilityValue(isSelected ? "Selected" : "Not selected")
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    .scaleEffect(isSelected ? 1.0 : 0.97)
                     .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-                    .opacity(isSelected ? 1 : 0.5)
                     .opacity(animateTokens ? 1 : 0)
                     .offset(y: animateTokens ? 0 : 4)
                     .animation(.smooth(duration: 0.25).delay(Double(index) * 0.04), value: animateTokens)
@@ -302,8 +369,9 @@ struct ContentView: View {
             .padding(12)
         }
         .contentShape(Rectangle())
-        .glassBackground(cornerRadius: 20)
-        .padding(.horizontal, 8)
+        .liquidGlass(in: .rect(cornerRadius: 20))
+        .frame(maxWidth: 500)
+        .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .onChange(of: appState.availableStreams) { old, new in
             if old.isEmpty && !new.isEmpty {
@@ -509,11 +577,11 @@ struct FlowLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = layout(proposal: proposal, subviews: subviews)
-        let maxWidth = proposal.width ?? bounds.width
+        let contentWidth = result.size.width
         for (index, position) in result.positions.enumerated() {
             let row = result.rowIndices[index]
             let rowWidth = result.rowWidths[row]
-            let centeredX = bounds.minX + position.x + (maxWidth - rowWidth) / 2
+            let centeredX = bounds.minX + position.x + (contentWidth - rowWidth) / 2
             subviews[index].place(at: CGPoint(x: centeredX, y: bounds.minY + position.y), proposal: .unspecified)
         }
     }
@@ -551,8 +619,9 @@ struct FlowLayout: Layout {
         }
         rowWidths.append(x - spacing)
 
+        let contentWidth = rowWidths.max() ?? 0
         return LayoutResult(
-            size: CGSize(width: maxWidth, height: y + rowHeight),
+            size: CGSize(width: contentWidth, height: y + rowHeight),
             positions: positions,
             rowIndices: rowIndices,
             rowWidths: rowWidths
