@@ -20,6 +20,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -27,6 +29,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>TileCam connects to camera servers on your local network to show live video.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TileCam needs microphone access for WebRTC audio streaming</string>
 	<key>UIApplicationSceneManifest</key>
