@@ -146,16 +146,19 @@ struct CameraSnapshotView: View {
 
             // Respect wrist-down behavior setting
             if settings.keepAudioOnWristDown && !settings.keepVideoOnWristDown {
-                // Audio-only: cancel timeout (passive listening shouldn't be interrupted)
-                timeoutTask?.cancel()
+                // Audio-only: keep listening but honor the user's stream timeout so
+                // the extended-runtime session ends at the configured bound rather
+                // than riding to the ~30 min OS expiry.
+                resetWristDownTimeout()
                 stalenessTimer?.cancel()
                 if session.currentMode != .audioOnly {
                     session.changeMode(.audioOnly)
                 }
                 ExtendedRuntimeManager.shared.startIfNeeded()
             } else if settings.keepVideoOnWristDown {
-                // Always-on: cancel timeout, keep everything running
-                timeoutTask?.cancel()
+                // Always-on: keep everything running but honor the user's stream
+                // timeout so it ends at the configured bound, not OS expiry.
+                resetWristDownTimeout()
                 stalenessTimer?.cancel()
                 ExtendedRuntimeManager.shared.startIfNeeded()
             } else {
@@ -481,6 +484,20 @@ struct CameraSnapshotView: View {
             showTimeoutPrompt = true
             try? await Task.sleep(for: .seconds(60))
             guard !Task.isCancelled, showTimeoutPrompt else { return }
+            session.unsubscribe()
+        }
+    }
+
+    /// Wrist-down timeout: honor the configured stream-timeout so the extended
+    /// runtime session and stream end at the user's bound rather than riding to
+    /// the ~30 min OS expiry.
+    private func resetWristDownTimeout() {
+        timeoutTask?.cancel()
+        guard settings.hasTimeout else { return }
+        timeoutTask = Task {
+            try? await Task.sleep(for: .seconds(settings.timeoutSeconds))
+            guard !Task.isCancelled else { return }
+            ExtendedRuntimeManager.shared.stop()
             session.unsubscribe()
         }
     }
