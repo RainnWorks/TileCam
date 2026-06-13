@@ -1,51 +1,9 @@
 {
   "images" : [
     {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "33x36"
-    },
-    {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "38x42"
-    },
-    {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "40x44"
-    },
-    {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "44x50"
-    },
-    {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "46x52"
-    },
-    {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "51x56"
-    },
-    {
-      "idiom" : "watch",
-      "platform" : "watchOS",
-      "scale" : "2x",
-      "size" : "54x60"
-    },
-    {
-      "idiom" : "watch-marketing",
-      "platform" : "watchOS",
-      "scale" : "1x",
+      "filename" : "prompt1.png",
+      "idiom" : "universal",
+      "platform" : "watchos",
       "size" : "1024x1024"
     }
   ],
