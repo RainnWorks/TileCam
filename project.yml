@@ -12,6 +12,24 @@ packages:
     url: https://github.com/stasel/WebRTC
     exactVersion: "140.0.0"
 
+schemes:
+  TileCam:
+    build:
+      targets:
+        TileCam: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  TileCamWatch:
+    build:
+      targets:
+        TileCamWatch: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
 targets:
   TileCam:
     type: application
@@ -36,6 +54,7 @@ targets:
       - package: WebRTC
       - target: TileCamWatch
         embed: watch2
+        platforms: [iOS]
 
   TileCamWatch:
     type: application
