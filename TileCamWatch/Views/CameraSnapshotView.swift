@@ -201,7 +201,7 @@ struct CameraSnapshotView: View {
         if let image = session.latestSnapshot {
             Image(uiImage: image)
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .opacity(session.isStreamPaused ? 0.4 : (isFrameStale ? 0.7 : 1.0))
                 .animation(.easeInOut(duration: 0.4), value: session.isStreamPaused)
                 .animation(.easeInOut(duration: 0.4), value: isFrameStale)

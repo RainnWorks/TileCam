@@ -349,20 +349,22 @@ struct GlanceCameraView: View {
 
         // Respect wrist-down behavior setting
         if settings.keepAudioOnWristDown && !settings.keepVideoOnWristDown {
-            // Audio-only: switch to audio mode, keep streaming
-            // Cancel timeout — passive listening shouldn't be interrupted by "still watching?"
-            timeoutTask?.cancel()
+            // Audio-only: switch to audio mode, keep streaming — but still honor
+            // the user's stream-timeout so the extended runtime session ends at
+            // the configured bound instead of riding to OS expiry (~30 min).
             stalenessTimer?.cancel()
             if session.currentMode != .audioOnly {
                 session.changeMode(.audioOnly)
             }
             ExtendedRuntimeManager.shared.startIfNeeded()
+            resetWristDownTimeout()
         } else if settings.keepVideoOnWristDown {
-            // Always-on: keep everything running (skip unsubscribe)
-            // Cancel timeout — user explicitly chose to keep streaming
-            timeoutTask?.cancel()
+            // Always-on: keep everything running (skip unsubscribe) — but still
+            // honor the user's stream-timeout so the extended runtime session
+            // ends at the configured bound rather than at OS expiry.
             stalenessTimer?.cancel()
             ExtendedRuntimeManager.shared.startIfNeeded()
+            resetWristDownTimeout()
         } else {
             // Eco: stop everything
             timeoutTask?.cancel()
@@ -378,6 +380,21 @@ struct GlanceCameraView: View {
         timeoutTask = Task {
             try? await Task.sleep(for: .seconds(settings.timeoutSeconds))
             guard !Task.isCancelled else { return }
+            session.unsubscribe()
+        }
+    }
+
+    /// Timeout for wrist-down audio-only / always-on modes. Honors the user's
+    /// configured stream-timeout: when it fires, stop the extended runtime
+    /// session and unsubscribe so background streaming ends at the configured
+    /// bound rather than riding to the ~30 min OS expiry.
+    private func resetWristDownTimeout() {
+        timeoutTask?.cancel()
+        guard settings.hasTimeout else { return }
+        timeoutTask = Task {
+            try? await Task.sleep(for: .seconds(settings.timeoutSeconds))
+            guard !Task.isCancelled else { return }
+            ExtendedRuntimeManager.shared.stop()
             session.unsubscribe()
         }
     }

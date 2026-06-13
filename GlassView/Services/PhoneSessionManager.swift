@@ -3,6 +3,11 @@ import WatchConnectivity
 import UIKit
 import os
 
+extension Notification.Name {
+    static let wristBehaviorChangedFromWatch = Notification.Name("wristBehaviorChangedFromWatch")
+    static let watchSettingsChangedFromWatch = Notification.Name("watchSettingsChangedFromWatch")
+}
+
 private let log = Logger(subsystem: "works.rainn.tilecam", category: "WatchSession")
 
 /// Message type tags prefixed to sendMessageData payloads.
@@ -20,6 +25,29 @@ enum WatchStreamMode: String {
 
 /// Max payload size for WCSession sendMessageData (~62KB leaves headroom under the ~65KB limit).
 private let maxWCMessageSize = 62_000
+
+/// Lock-guarded boolean shared safely across executors (watchdog Task ↔ byte-loop).
+/// Replaces captured-local `var` flags that would otherwise be a data race.
+private final class AtomicFlag: @unchecked Sendable {
+    private var lock = os_unfair_lock()
+    private var value = false
+
+    /// Sets the flag and returns its previous value.
+    @discardableResult
+    func set() -> Bool {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+        let old = value
+        value = true
+        return old
+    }
+
+    var isSet: Bool {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+        return value
+    }
+}
 
 /// MJPEG frame buffer cap — drop malformed frames that never terminate.
 private let maxFrameBufferSize = 512_000
@@ -41,6 +69,8 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     static let shared = PhoneSessionManager()
 
     @Published var isWatchReachable = false
+    /// True when MJPEG streaming failed and we fell back to snapshot polling.
+    @Published var isWatchStreamDegraded = false
 
     private var session: WCSession?
     private var go2rtcService: Go2RTCService?
@@ -107,17 +137,39 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         self.go2rtcService = service
     }
 
+    private(set) var availableStreamNames: [String] = []
+
+    private(set) var selectedStreamEntries: [[String: Any]] = []
+
     func updateAvailableStreams(_ streams: [String]) {
+        availableStreamNames = streams
+        syncStreamsToWatch()
+    }
+
+    func updateSelectedStreams(_ entries: [[String: Any]]) {
+        selectedStreamEntries = entries
+        syncStreamsToWatch()
+    }
+
+    private func syncStreamsToWatch() {
         guard let session, session.activationState == .activated else { return }
         let behavior = UserDefaults.standard.string(forKey: "wristBehavior") ?? "eco"
         do {
             try session.updateApplicationContext([
-                "streams": streams,
+                "streams": availableStreamNames,
+                "selectedStreams": selectedStreamEntries,
                 "timestamp": Date().timeIntervalSince1970,
                 "wristBehavior": behavior
             ])
         } catch {
             log.error("Failed to update application context: \(error)")
+        }
+        if session.isReachable {
+            session.sendMessage([
+                "action": "streamsUpdate",
+                "streams": availableStreamNames,
+                "selectedStreams": selectedStreamEntries
+            ], replyHandler: nil, errorHandler: nil)
         }
     }
 
@@ -144,6 +196,30 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             try session.updateApplicationContext(ctx)
         } catch {
             log.error("Failed to update applicationContext with wristBehavior: \(error)")
+        }
+    }
+
+    func syncWatchSettings(_ settings: [String: Any]) {
+        guard let session else { return }
+        // Immediate delivery
+        if session.isReachable {
+            var msg = settings
+            msg["action"] = "syncSettings"
+            session.sendMessage(msg, replyHandler: nil, errorHandler: { error in
+                log.error("Watch settings sync failed: \(error)")
+            })
+        }
+        // Persistent via applicationContext
+        guard session.activationState == .activated else { return }
+        var ctx = session.receivedApplicationContext
+        for (key, value) in settings {
+            ctx["watch_\(key)"] = value
+        }
+        ctx["timestamp"] = Date().timeIntervalSince1970
+        do {
+            try session.updateApplicationContext(ctx)
+        } catch {
+            log.error("Failed to update applicationContext with watch settings: \(error)")
         }
     }
 
@@ -206,6 +282,7 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         streamGeneration &+= 1
         watchedStreamName = streamName
         currentMode = mode
+        isWatchStreamDegraded = false
 
         if let (z, cx, cy) = viewport {
             viewportZoom = z
@@ -219,7 +296,11 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
 
         if mode != .audioOnly {
-            startVideoStreaming(service: service, streamName: streamName)
+            // Start snapshot polling immediately so Watch gets frames fast.
+            // Also try MJPEG in parallel — if it succeeds, it'll take over
+            // by bumping streamGeneration when we promote it.
+            startSnapshotPolling(service: service, streamName: streamName)
+            tryUpgradeToMJPEG(service: service, streamName: streamName)
         }
         if mode != .videoOnly {
             startAudioStreaming(service: service, streamName: streamName)
@@ -255,15 +336,43 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         ViewportSnapshot(zoom: viewportZoom, centerX: viewportCenterX, centerY: viewportCenterY)
     }
 
-    // MARK: - Video: MJPEG stream from /api/stream.mjpeg
+    // MARK: - Video streaming (old startVideoStreaming removed — now uses polling + MJPEG upgrade)
 
-    private func startVideoStreaming(service: Go2RTCService, streamName: String) {
+    /// Tries MJPEG streaming in the background. If it gets a frame, replaces snapshot polling.
+    private func tryUpgradeToMJPEG(service: Go2RTCService, streamName: String) {
         let generation = streamGeneration
-        snapshotTask = Task.detached { [weak self] in
+        Task.detached { [weak self] in
             do {
                 let (url, urlSession) = try service.openMJPEGStream(streamName: streamName)
-                await MainActor.run { self?.mjpegSession = urlSession }
-                let (bytes, _) = try await urlSession.bytes(from: url)
+
+                // Store the session immediately (respecting generation) so a
+                // resubscribe/unsubscribe can invalidate it even if connect
+                // stalls before the first frame — otherwise it leaks until the
+                // request timeout. If the generation already moved on, this open
+                // is stale: invalidate now and bail.
+                let stored = await MainActor.run { () -> Bool in
+                    guard let self, self.streamGeneration == generation else { return false }
+                    self.mjpegSession = urlSession
+                    return true
+                }
+                guard stored else {
+                    urlSession.invalidateAndCancel()
+                    return
+                }
+
+                // 10s watchdog. gotFrame is shared across executors (watchdog
+                // Task reads, byte-loop writes), so guard it with a lock.
+                let gotFrame = AtomicFlag()
+                let watchdog = Task {
+                    try await Task.sleep(for: .seconds(10))
+                    if !gotFrame.isSet { urlSession.invalidateAndCancel() }
+                }
+
+                let (bytes, response) = try await urlSession.bytes(from: url)
+                if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                    watchdog.cancel()
+                    return
+                }
 
                 var buffer = Data()
                 let jpegStart = Data([0xFF, 0xD8])
@@ -272,87 +381,91 @@ final class PhoneSessionManager: NSObject, ObservableObject {
 
                 for try await byte in bytes {
                     if Task.isCancelled { break }
-                    buffer.append(byte)
+                    guard await MainActor.run(body: { self?.streamGeneration == generation }) else { break }
 
+                    buffer.append(byte)
                     if !inFrame {
                         if buffer.count >= 2 && buffer.suffix(2) == jpegStart {
-                            buffer = jpegStart
-                            inFrame = true
+                            buffer = jpegStart; inFrame = true
                         } else if buffer.count > 256 {
                             buffer.removeAll(keepingCapacity: true)
                         }
-                    } else {
-                        if buffer.count > maxFrameBufferSize {
-                            log.warning("MJPEG frame buffer exceeded \(maxFrameBufferSize) bytes, dropping")
-                            buffer.removeAll(keepingCapacity: true)
-                            inFrame = false
-                            continue
+                    } else if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
+                        if !gotFrame.set() {
+                            watchdog.cancel()
+                            // Promote: stop snapshot polling, take over with MJPEG
+                            // mjpegSession was already stored right after open.
+                            await MainActor.run {
+                                self?.snapshotTask?.cancel()
+                                self?.snapshotTask = nil
+                                self?.isWatchStreamDegraded = false
+                            }
+                            log.info("MJPEG upgrade succeeded — switching from snapshot polling")
                         }
 
-                        if buffer.count >= 2 && buffer.suffix(2) == jpegEnd {
-                            // Fix #1: Snapshot viewport on MainActor, then crop off-main
-                            let viewport = await MainActor.run { self?.snapshotViewport() }
-                            guard let viewport else { break }
+                        let viewport = await MainActor.run { self?.snapshotViewport() }
+                        guard let viewport else { break }
 
-                            // Fix #9: Skip crop if viewport unchanged and we have a cached frame of same source size
-                            let frame: Data
-                            if let cached = await MainActor.run(body: { self?.cachedCropIfUnchanged(viewport: viewport, rawSize: buffer.count) }) {
-                                frame = cached
-                            } else {
-                                let cropped = Self.cropFrame(buffer, viewport: viewport)
-                                let sized = Self.ensureFrameFits(cropped)
-                                await MainActor.run { self?.updateCropCache(viewport: viewport, frame: sized) }
-                                frame = sized
-                            }
-
-                            // Backpressure: skip frame if previous send still in-flight
-                            let shouldSend = await MainActor.run { () -> Bool in
-                                guard let self else { return false }
-                                if self.videoSendInFlight { return false }
-                                self.videoSendInFlight = true
-                                return true
-                            }
-                            if shouldSend {
-                                await self?.sendVideoFrame(frame)
-                            }
-                            buffer.removeAll(keepingCapacity: true)
-                            inFrame = false
+                        let frame: Data
+                        if let cached = await MainActor.run(body: { self?.cachedCropIfUnchanged(viewport: viewport, rawSize: buffer.count) }) {
+                            frame = cached
+                        } else {
+                            let cropped = Self.cropFrame(buffer, viewport: viewport)
+                            let sized = Self.ensureFrameFits(cropped)
+                            await MainActor.run { self?.updateCropCache(viewport: viewport, frame: sized) }
+                            frame = sized
                         }
+
+                        let shouldSend = await MainActor.run { () -> Bool in
+                            guard let self else { return false }
+                            if self.videoSendInFlight { return false }
+                            self.videoSendInFlight = true
+                            return true
+                        }
+                        if shouldSend { await self?.sendVideoFrame(frame) }
+                        buffer.removeAll(keepingCapacity: true)
+                        inFrame = false
+                    } else if buffer.count > maxFrameBufferSize {
+                        buffer.removeAll(keepingCapacity: true)
+                        inFrame = false
                     }
                 }
             } catch {
+                // MJPEG failed — snapshot polling continues, no action needed.
+                // Skip if this generation was already torn down (the throw is
+                // then our own invalidateAndCancel on unsubscribe, not a fault).
                 if !Task.isCancelled {
-                    log.error("MJPEG stream failed: \(error)")
-                    await self?.fallbackToPollingIfStillActive(
-                        service: service, streamName: streamName, generation: generation
-                    )
+                    let stillCurrent = await MainActor.run { self?.streamGeneration == generation }
+                    if stillCurrent {
+                        log.info("MJPEG upgrade failed (snapshot polling continues): \(error)")
+                        await MainActor.run { self?.isWatchStreamDegraded = true }
+                    }
                 }
             }
         }
     }
 
-    /// Only starts polling if we're still on the same subscribe generation.
-    private func fallbackToPollingIfStillActive(service: Go2RTCService, streamName: String, generation: UInt64) {
-        guard generation == self.streamGeneration, watchedStreamName == streamName else {
-            log.info("Skipping polling fallback — stream generation changed")
-            return
-        }
-        startSnapshotPolling(service: service, streamName: streamName)
-    }
+    // fallbackToPollingIfStillActive removed — polling starts immediately now
 
     private func startSnapshotPolling(service: Go2RTCService, streamName: String) {
         let generation = streamGeneration
         snapshotTask = Task {
             while !Task.isCancelled && generation == streamGeneration {
-                do {
-                    let jpegData = try await service.fetchFrame(streamName: streamName)
-                    let viewport = snapshotViewport()
-                    let cropped = Self.cropFrame(jpegData, viewport: viewport)
-                    let sizedFrame = Self.ensureFrameFits(cropped)
-                    sendVideoFrame(sizedFrame)
-                } catch {
-                    if !Task.isCancelled {
-                        log.error("Snapshot fetch failed: \(error)")
+                // Backpressure: wait for previous frame to be delivered
+                if !videoSendInFlight {
+                    do {
+                        let jpegData = try await service.fetchFrame(streamName: streamName)
+                        let viewport = snapshotViewport()
+                        let cropped = Self.cropFrame(jpegData, viewport: viewport)
+                        let sizedFrame = Self.ensureFrameFits(cropped)
+                        if sizedFrame.count + 1 <= maxWCMessageSize {
+                            videoSendInFlight = true
+                            sendVideoFrame(sizedFrame)
+                        }
+                    } catch {
+                        if !Task.isCancelled {
+                            log.error("Snapshot fetch failed: \(error)")
+                        }
                     }
                 }
                 try? await Task.sleep(for: .milliseconds(500))
@@ -397,15 +510,18 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             }
         }
 
-        // Last resort: scale down the image
-        let scale = sqrt(Double(maxWCMessageSize) / Double(jpegData.count))
-        let newSize = CGSize(
-            width: CGFloat(cgImage.width) * scale,
-            height: CGFloat(cgImage.height) * scale
-        )
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        let scaled = renderer.image { _ in uiImage.draw(in: CGRect(origin: .zero, size: newSize)) }
-        return scaled.jpegData(compressionQuality: 0.3) ?? jpegData
+        // Last resort: scale down progressively until it fits
+        for targetWidth in [480.0, 320.0, 240.0] as [CGFloat] {
+            let ratio = targetWidth / CGFloat(cgImage.width)
+            if ratio >= 1 { continue }
+            let newSize = CGSize(width: targetWidth, height: CGFloat(cgImage.height) * ratio)
+            let renderer = UIGraphicsImageRenderer(size: newSize)
+            let scaled = renderer.image { _ in uiImage.draw(in: CGRect(origin: .zero, size: newSize)) }
+            if let data = scaled.jpegData(compressionQuality: 0.3), data.count <= maxWCMessageSize {
+                return data
+            }
+        }
+        return jpegData
     }
 
     // MARK: - Viewport Cropping (nonisolated — Fix #1)
@@ -444,12 +560,35 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             do {
                 let (url, streamSession) = try service.openAudioStream(streamName: streamName)
                 await MainActor.run { self?.audioStreamSession = streamSession }
-                let (bytes, _) = try await streamSession.bytes(from: url)
+
+                // Watchdog: cancel if no data in 10s. receivedAnyData is shared
+                // across executors (watchdog reads, byte-loop writes), so guard
+                // it with a lock.
+                let receivedAnyData = AtomicFlag()
+                let watchdog = Task {
+                    try await Task.sleep(for: .seconds(10))
+                    if !receivedAnyData.isSet {
+                        log.warning("Audio stream watchdog: no data in 10s, cancelling")
+                        streamSession.invalidateAndCancel()
+                    }
+                }
+
+                let (bytes, response) = try await streamSession.bytes(from: url)
+
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                    log.error("Audio stream returned HTTP \(httpResponse.statusCode)")
+                    watchdog.cancel()
+                    return
+                }
 
                 var buffer = Data()
 
                 for try await byte in bytes {
                     if Task.isCancelled { break }
+                    if !receivedAnyData.set() {
+                        watchdog.cancel()
+                        log.info("Audio stream first data received")
+                    }
                     buffer.append(byte)
 
                     // Accumulate until we have enough data, then split on MP3 frame boundaries
@@ -493,15 +632,28 @@ final class PhoneSessionManager: NSObject, ObservableObject {
             videoSendInFlight = false
             return
         }
+        guard payload.count + 1 <= maxWCMessageSize else {
+            log.warning("Video frame too large after compression (\(payload.count) bytes), dropping")
+            videoSendInFlight = false
+            return
+        }
         var message = Data(capacity: 1 + payload.count)
         message.append(WatchDataTag.videoFrame.rawValue)
         message.append(payload)
-        WCSession.default.sendMessageData(message, replyHandler: { [weak self] _ in
-            Task { @MainActor in self?.videoSendInFlight = false }
-        }, errorHandler: { [weak self] error in
-            log.error("Video send failed: \(error)")
-            Task { @MainActor in self?.videoSendInFlight = false }
-        })
+        // Tie the in-flight reset to actual delivery: the Watch's reply (acked
+        // receipt) or the error callback is the real completion signal, not a
+        // guessed timer. Exactly one of the two fires per send, so it's a single
+        // owner of the flag and the relay can't latch true at teardown.
+        WCSession.default.sendMessageData(
+            message,
+            replyHandler: { [weak self] _ in
+                Task { @MainActor in self?.videoSendInFlight = false }
+            },
+            errorHandler: { [weak self] error in
+                log.error("Video send failed: \(error)")
+                Task { @MainActor in self?.videoSendInFlight = false }
+            }
+        )
     }
 
     private func sendTaggedData(tag: WatchDataTag, payload: Data) {
@@ -599,7 +751,7 @@ extension PhoneSessionManager: WCSessionDelegate {
                     if let z = message["zoom"] as? Double {
                         let cx = message["centerX"] as? Double ?? 0.5
                         let cy = message["centerY"] as? Double ?? 0.5
-                        viewport = (z, cx, cy)
+                        viewport = (CGFloat(z), CGFloat(cx), CGFloat(cy))
                     }
                     self.subscribeToStream(name, mode: mode, viewport: viewport)
                 }
@@ -615,6 +767,20 @@ extension PhoneSessionManager: WCSessionDelegate {
                 // Invalidate crop cache when viewport changes
                 self.lastCropViewport = nil
                 self.lastCroppedFrame = nil
+            case "getStreams":
+                replyHandler?(["streams": self.availableStreamNames, "selectedStreams": self.selectedStreamEntries])
+                return
+            case "setWristBehavior":
+                if let value = message["value"] as? String {
+                    UserDefaults.standard.set(value, forKey: "wristBehavior")
+                    NotificationCenter.default.post(name: .wristBehaviorChangedFromWatch, object: value)
+                }
+            case "setWatchSettings":
+                if let v = message["glanceModeEnabled"] as? Bool { UserDefaults.standard.set(v, forKey: "watchGlanceModeEnabled") }
+                if let v = message["defaultStreamMode"] as? String { UserDefaults.standard.set(v, forKey: "watchDefaultStreamMode") }
+                if let v = message["streamTimeoutMinutes"] as? Int { UserDefaults.standard.set(v, forKey: "watchStreamTimeoutMinutes") }
+                if let v = message["glanceDefaultCamera"] as? String { UserDefaults.standard.set(v, forKey: "watchGlanceDefaultCamera") }
+                NotificationCenter.default.post(name: .watchSettingsChangedFromWatch, object: nil)
             default:
                 break
             }

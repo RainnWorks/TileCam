@@ -69,7 +69,7 @@ final class AudioChunkPlayer: ObservableObject {
 
         // Fix #5: Drop incoming audio if too far behind (drift protection)
         if queuedBufferCount >= maxQueuedBuffers {
-            log.warning("Audio queue saturated (\(queuedBufferCount) buffers), dropping to reduce drift")
+            log.warning("Audio queue saturated (\(self.queuedBufferCount) buffers), dropping to reduce drift")
             // Flush all queued audio and restart from this point
             playerNode.stop()
             playerNode.play()

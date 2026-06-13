@@ -15,20 +15,7 @@ struct CameraListView: View {
     @State private var showSettings = false
 
     var body: some View {
-        Group {
-            if settings.glanceModeEnabled {
-                GlanceCameraView(showSettings: $showSettings)
-                    .environmentObject(session)
-                    .sheet(isPresented: $showSettings) {
-                        NavigationStack {
-                            WatchSettingsView()
-                                .environmentObject(session)
-                        }
-                    }
-            } else {
-                standardNavigation
-            }
-        }
+        standardNavigation
     }
 
     private var standardNavigation: some View {
@@ -91,18 +78,51 @@ struct CameraListView: View {
     }
 
     private var streamList: some View {
-        List(session.availableStreams, id: \.self) { name in
-            NavigationLink(value: CameraDestination(streamName: name)) {
-                HStack(spacing: 10) {
-                    Image(systemName: "video.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        List {
+            if !session.phoneActiveStreams.isEmpty {
+                Section("On iPhone") {
+                    ForEach(session.phoneActiveStreams) { active in
+                        NavigationLink(value: CameraDestination(
+                            streamName: active.name,
+                            zoom: active.zoom,
+                            centerX: active.centerX,
+                            centerY: active.centerY
+                        )) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "iphone")
+                                    .font(.caption)
+                                    .foregroundStyle(.blue)
 
-                    Text(name.replacingOccurrences(of: "_", with: " "))
-                        .font(.body)
-                        .lineLimit(2)
+                                Text(active.name.replacingOccurrences(of: "_", with: " "))
+                                    .font(.body)
+                                    .lineLimit(2)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
                 }
-                .padding(.vertical, 2)
+            }
+
+            let otherStreams = session.availableStreams.filter { name in
+                !session.phoneActiveStreams.contains { $0.name == name }
+            }
+            if !otherStreams.isEmpty {
+                Section(session.phoneActiveStreams.isEmpty ? "Cameras" : "All Cameras") {
+                    ForEach(otherStreams, id: \.self) { name in
+                        NavigationLink(value: CameraDestination(streamName: name)) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "video.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                Text(name.replacingOccurrences(of: "_", with: " "))
+                                    .font(.body)
+                                    .lineLimit(2)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
             }
         }
         .listStyle(.carousel)

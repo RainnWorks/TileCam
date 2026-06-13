@@ -5,6 +5,15 @@ import os
 
 private let log = Logger(subsystem: "works.rainn.tilecam.watch", category: "Session")
 
+/// A stream currently visible on the iPhone with its viewport.
+struct PhoneActiveStream: Identifiable, Hashable {
+    let name: String
+    let zoom: CGFloat
+    let centerX: CGFloat
+    let centerY: CGFloat
+    var id: String { name }
+}
+
 /// Streaming modes that mirror the iPhone side.
 enum StreamMode: String, CaseIterable, Identifiable {
     case videoAndAudio = "videoAndAudio"
@@ -37,6 +46,8 @@ final class WatchSessionManager: NSObject, ObservableObject {
     static let shared = WatchSessionManager()
 
     @Published var availableStreams: [String] = []
+    /// Streams currently visible on the iPhone, with their viewport (zoom/pan).
+    @Published var phoneActiveStreams: [PhoneActiveStream] = []
     @Published var isPhoneReachable = false
     @Published var latestSnapshot: UIImage?
     @Published var subscribedStream: String?
@@ -78,6 +89,86 @@ final class WatchSessionManager: NSObject, ObservableObject {
         s.delegate = self
         s.activate()
         self.session = s
+    }
+
+    /// Apply watch settings from applicationContext (prefixed with "watch_")
+    func parsePhoneActiveStreams(_ entries: [[String: Any]]) -> [PhoneActiveStream] {
+        entries.compactMap { entry in
+            guard let name = entry["name"] as? String else { return nil }
+            return PhoneActiveStream(
+                name: name,
+                zoom: entry["zoom"] as? CGFloat ?? 1,
+                centerX: entry["centerX"] as? CGFloat ?? 0.5,
+                centerY: entry["centerY"] as? CGFloat ?? 0.5
+            )
+        }
+    }
+
+    func applySettingsFromContext(_ ctx: [String: Any]) {
+        let s = WatchSettings.shared
+        if let v = ctx["watch_glanceModeEnabled"] as? Bool { s.glanceModeEnabled = v }
+        if let v = ctx["watch_defaultStreamMode"] as? String { s.defaultStreamMode = v }
+        if let v = ctx["watch_streamTimeoutMinutes"] as? Int { s.streamTimeoutMinutes = v }
+        if let v = ctx["watch_glanceDefaultCamera"] as? String { s.glanceDefaultCamera = v }
+    }
+
+    /// Apply watch settings from a direct message
+    func applySettings(_ settings: [String: Any]) {
+        let s = WatchSettings.shared
+        if let v = settings["glanceModeEnabled"] as? Bool { s.glanceModeEnabled = v }
+        if let v = settings["defaultStreamMode"] as? String { s.defaultStreamMode = v }
+        if let v = settings["streamTimeoutMinutes"] as? Int { s.streamTimeoutMinutes = v }
+        if let v = settings["glanceDefaultCamera"] as? String { s.glanceDefaultCamera = v }
+        log.info("Watch settings applied from iPhone")
+    }
+
+    func syncSettingsToPhone() {
+        guard let session, session.isReachable else { return }
+        let s = WatchSettings.shared
+        session.sendMessage([
+            "request": "setWatchSettings",
+            "glanceModeEnabled": s.glanceModeEnabled,
+            "defaultStreamMode": s.defaultStreamMode,
+            "streamTimeoutMinutes": s.streamTimeoutMinutes,
+            "glanceDefaultCamera": s.glanceDefaultCamera,
+        ], replyHandler: nil, errorHandler: { error in
+            log.warning("Failed to sync settings to phone: \(error)")
+        })
+    }
+
+    func syncWristBehaviorToPhone(_ behavior: String) {
+        guard let session else { return }
+        // Immediate delivery
+        if session.isReachable {
+            session.sendMessage(["request": "setWristBehavior", "value": behavior], replyHandler: nil, errorHandler: { error in
+                log.warning("Failed to sync wrist behavior: \(error)")
+            })
+        }
+        // Persistent delivery via applicationContext
+        do {
+            var ctx = session.applicationContext
+            ctx["wristBehavior"] = behavior
+            ctx["timestamp"] = Date().timeIntervalSince1970
+            try session.updateApplicationContext(ctx)
+        } catch {
+            log.warning("Failed to update applicationContext: \(error)")
+        }
+    }
+
+    func requestStreamsFromPhone() {
+        guard let session, session.isReachable else { return }
+        session.sendMessage(["request": "getStreams"], replyHandler: { reply in
+            Task { @MainActor in
+                if let streams = reply["streams"] as? [String] {
+                    self.availableStreams = streams
+                }
+                if let selected = reply["selectedStreams"] as? [[String: Any]] {
+                    self.phoneActiveStreams = self.parsePhoneActiveStreams(selected)
+                }
+            }
+        }, errorHandler: { error in
+            log.warning("Failed to request streams: \(error)")
+        })
     }
 
     func subscribe(to streamName: String, mode: StreamMode, zoom: CGFloat = 1.0, centerX: CGFloat = 0.5, centerY: CGFloat = 0.5) {
@@ -234,13 +325,19 @@ extension WatchSessionManager: WCSessionDelegate {
         Task { @MainActor in
             self.isPhoneReachable = session.isReachable
             let ctx = session.receivedApplicationContext
-            if let streams = ctx["streams"] as? [String] {
+            if let streams = ctx["streams"] as? [String], !streams.isEmpty {
                 self.availableStreams = streams
+            } else if session.isReachable {
+                self.requestStreamsFromPhone()
             }
-            // Also restore wristBehavior from applicationContext on cold launch
+            if let selected = ctx["selectedStreams"] as? [[String: Any]] {
+                self.phoneActiveStreams = self.parsePhoneActiveStreams(selected)
+            }
+            // Restore settings from applicationContext on cold launch
             if let behavior = ctx["wristBehavior"] as? String {
                 WatchSettings.shared.wristBehavior = behavior
             }
+            self.applySettingsFromContext(ctx)
         }
     }
 
@@ -248,6 +345,9 @@ extension WatchSessionManager: WCSessionDelegate {
         log.info("Phone reachability: \(session.isReachable)")
         Task { @MainActor in
             self.isPhoneReachable = session.isReachable
+            if session.isReachable && self.availableStreams.isEmpty {
+                self.requestStreamsFromPhone()
+            }
         }
     }
 
@@ -259,13 +359,26 @@ extension WatchSessionManager: WCSessionDelegate {
             if let streams = applicationContext["streams"] as? [String] {
                 self.availableStreams = streams
             }
+            if let selected = applicationContext["selectedStreams"] as? [[String: Any]] {
+                self.phoneActiveStreams = self.parsePhoneActiveStreams(selected)
+            }
             if let behavior = applicationContext["wristBehavior"] as? String {
                 WatchSettings.shared.wristBehavior = behavior
             }
+            self.applySettingsFromContext(applicationContext)
         }
     }
 
+    nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
+        replyHandler(Data())
+        handleIncomingData(messageData)
+    }
+
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
+        handleIncomingData(messageData)
+    }
+
+    private nonisolated func handleIncomingData(_ messageData: Data) {
         guard messageData.count > 1, let tag = messageData.first else { return }
         let payload = messageData.dropFirst()
 
@@ -304,11 +417,20 @@ extension WatchSessionManager: WCSessionDelegate {
             case "streamResumed":
                 self.isStreamPaused = false
                 log.info("iPhone stream resumed")
+            case "streamsUpdate":
+                if let streams = message["streams"] as? [String] {
+                    self.availableStreams = streams
+                }
+                if let selected = message["selectedStreams"] as? [[String: Any]] {
+                    self.phoneActiveStreams = self.parsePhoneActiveStreams(selected)
+                }
             case "wristBehavior":
                 if let value = message["value"] as? String {
                     WatchSettings.shared.wristBehavior = value
                     log.info("Wrist behavior updated: \(value)")
                 }
+            case "syncSettings":
+                self.applySettings(message)
             default:
                 break
             }

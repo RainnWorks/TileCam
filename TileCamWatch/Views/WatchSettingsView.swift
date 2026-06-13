@@ -4,63 +4,38 @@ struct WatchSettingsView: View {
     @EnvironmentObject var session: WatchSessionManager
     @ObservedObject var settings = WatchSettings.shared
 
-    private var wristBehaviorLabel: String {
-        switch settings.wristBehavior {
-        case "audioOnly": return "Listen"
-        case "alwaysOn": return "Stay On"
-        default: return "Pause"
-        }
-    }
-
-    private var wristBehaviorIcon: String {
-        switch settings.wristBehavior {
-        case "audioOnly": return "headphones"
-        case "alwaysOn": return "eye.fill"
-        default: return "moon.zzz.fill"
-        }
+    private var wristBehaviorBinding: Binding<WristBehavior> {
+        Binding(
+            get: { WristBehavior(rawValue: settings.wristBehavior) ?? .eco },
+            set: { newValue in
+                settings.wristBehavior = newValue.rawValue
+                session.syncWristBehaviorToPhone(newValue.rawValue)
+            }
+        )
     }
 
     var body: some View {
         List {
+            // MARK: - When Wrist Lowers
+            Section {
+                WristBehaviorPickerWatch(selection: wristBehaviorBinding)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            } header: {
+                Text("When Wrist Lowers")
+            }
+
             // MARK: - Glance Mode
             Section {
                 Toggle(isOn: $settings.glanceModeEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Glance Mode")
                             .font(.body)
-                        Text("Tap for controls, tap to hide")
+                        Text("Simplified camera view")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
-
-                if settings.glanceModeEnabled {
-                    Picker("Camera", selection: $settings.glanceDefaultCamera) {
-                        Text("First available")
-                            .tag("")
-                        ForEach(session.availableStreams, id: \.self) { name in
-                            Text(name.replacingOccurrences(of: "_", with: " "))
-                                .tag(name)
-                        }
-                    }
-                }
-            }
-
-            // MARK: - Wrist Behavior (read-only, set on iPhone)
-            Section {
-                HStack {
-                    Label(wristBehaviorLabel, systemImage: wristBehaviorIcon)
-                        .font(.body)
-                    Spacer()
-                    Text("iPhone")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("When Wrist Lowers")
-            } footer: {
-                Text("Change this setting from the iPhone app.")
-                    .font(.caption2)
             }
 
             // MARK: - Streaming
@@ -88,5 +63,9 @@ struct WatchSettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: settings.glanceModeEnabled) { _, _ in session.syncSettingsToPhone() }
+        .onChange(of: settings.defaultStreamMode) { _, _ in session.syncSettingsToPhone() }
+        .onChange(of: settings.streamTimeoutMinutes) { _, _ in session.syncSettingsToPhone() }
+        .onChange(of: settings.glanceDefaultCamera) { _, _ in session.syncSettingsToPhone() }
     }
 }
