@@ -72,6 +72,11 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     /// True when MJPEG streaming failed and we fell back to snapshot polling.
     @Published var isWatchStreamDegraded = false
 
+    /// Whether the Apple Watch unlock IAP has been purchased. Source of truth is
+    /// `StoreManager`, which calls `setWatchEntitlement(_:)` on every change.
+    /// Gates all Watch subscribe paths — no purchase, no streaming.
+    var isWatchUnlocked = false
+
     private var session: WCSession?
     private var go2rtcService: Go2RTCService?
 
@@ -199,6 +204,46 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Watch Unlock Entitlement
+
+    /// Records the Watch unlock entitlement and pushes it to the Watch. When the
+    /// entitlement is revoked (refund / Family Sharing removal), tears down any
+    /// in-flight Watch stream immediately so the Watch stops receiving frames.
+    func setWatchEntitlement(_ unlocked: Bool) {
+        isWatchUnlocked = unlocked
+        syncWatchUnlocked(unlocked)
+        if !unlocked {
+            // Kill any active Watch stream right now — don't wait for the Watch
+            // to notice and unsubscribe.
+            unsubscribeFromStream(clearRecovery: true)
+        }
+    }
+
+    /// Syncs the Watch unlock flag to the Watch via direct message + applicationContext.
+    /// Dual-write mirrors `syncWristBehavior`: sendMessage for immediacy,
+    /// applicationContext for persistence (survives restarts, delivered on cold launch).
+    func syncWatchUnlocked(_ unlocked: Bool) {
+        guard let session else { return }
+
+        if session.isReachable {
+            session.sendMessage(
+                ["action": "watchUnlocked", "value": unlocked],
+                replyHandler: nil,
+                errorHandler: { error in log.error("watchUnlocked sync failed: \(error)") }
+            )
+        }
+
+        guard session.activationState == .activated else { return }
+        var ctx = session.receivedApplicationContext
+        ctx["watchUnlocked"] = unlocked
+        ctx["timestamp"] = Date().timeIntervalSince1970
+        do {
+            try session.updateApplicationContext(ctx)
+        } catch {
+            log.error("Failed to update applicationContext with watchUnlocked: \(error)")
+        }
+    }
+
     func syncWatchSettings(_ settings: [String: Any]) {
         guard let session else { return }
         // Immediate delivery
@@ -257,8 +302,9 @@ final class PhoneSessionManager: NSObject, ObservableObject {
         Task { @MainActor in
             self.isAppBackgrounded = false
             log.info("App foregrounded — resuming Watch stream if needed")
-            // Resume streaming if Watch is still subscribed
-            if let name = self.watchedStreamName, let session = self.session, session.isReachable {
+            // Resume streaming if Watch is still subscribed (and still entitled)
+            if let name = self.watchedStreamName, self.isWatchUnlocked,
+               let session = self.session, session.isReachable {
                 session.sendMessage(
                     ["action": "streamResumed"],
                     replyHandler: nil,
@@ -702,7 +748,7 @@ extension PhoneSessionManager: WCSessionDelegate {
                 // BT blip recovery: Watch had an active subscription before the blip.
                 // Check wrist behavior — only auto-recover for non-eco modes.
                 let behavior = UserDefaults.standard.string(forKey: "wristBehavior") ?? "eco"
-                if behavior != "eco" {
+                if behavior != "eco" && self.isWatchUnlocked {
                     log.info("BT recovered — restoring stream \(sub.name) mode \(sub.mode.rawValue)")
                     self.subscribeToStream(sub.name, mode: sub.mode, viewport: nil)
                 } else {
@@ -735,6 +781,13 @@ extension PhoneSessionManager: WCSessionDelegate {
         Task { @MainActor in
             switch request {
             case "subscribe":
+                // Hard lock: no Watch unlock purchase means no streaming. Reply
+                // "locked" so the Watch exits its spinner and shows the paywall.
+                guard self.isWatchUnlocked else {
+                    log.info("Rejecting subscribe — Watch not unlocked")
+                    replyHandler?(["status": "locked"])
+                    return
+                }
                 if let name = message["streamName"] as? String {
                     // Reject stale/reordered subscribe messages using monotonic generation counter
                     if let gen = message["generation"] as? UInt64 {

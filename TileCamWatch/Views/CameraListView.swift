@@ -21,7 +21,9 @@ struct CameraListView: View {
     private var standardNavigation: some View {
         NavigationStack(path: $navigationPath) {
             Group {
-                if !session.isPhoneReachable {
+                if !settings.watchUnlocked {
+                    WatchPaywallView()
+                } else if !session.isPhoneReachable {
                     notReachableView
                 } else if session.availableStreams.isEmpty {
                     noStreamsView

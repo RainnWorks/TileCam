@@ -18,6 +18,7 @@
 		3EAF0AC2CCEF004F5C81B6E6 /* PhoneSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3563C36D319350555E97D8C /* PhoneSessionManager.swift */; };
 		4199C2DA076A70008435AE7E /* TileCamWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6F4022B24DDBA44BB6797264 /* TileCamWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4E2C4865B271C3577E590811 /* EulerianMagnifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5CBE2E3AABF8089C9CB27B /* EulerianMagnifier.swift */; };
+		5508B6BFB3F7C2555A011E22 /* WatchPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */; };
 		568D24402C66DFF0F7BACB0B /* MotionAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9230725F297FA88F5C769F2 /* MotionAnalyzer.swift */; };
 		64418B09074B87E4321FE4CB /* WristBehaviorPickerWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A089E889ED84A3635B8E3AB0 /* WristBehaviorPickerWatch.swift */; };
 		657D107BEC12C8D5CF69C8D9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 18E8785D6B15F26FB5037751 /* PrivacyInfo.xcprivacy */; };
@@ -34,8 +35,10 @@
 		95D59AF0DE39B42B5B711E6C /* CameraSnapshotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709F3DEBC14B9B2B5B51FE0B /* CameraSnapshotView.swift */; };
 		A3E5C8C1FFB04C12BD915610 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F900FB47F9C78CFDE5C0A1E /* Assets.xcassets */; };
 		A700858E8D7DAA7E587EF49B /* GlassBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */; };
+		A72BC5A238A3ACD549F5291A /* WatchUnlockPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754733AD8EA61A62296D3792 /* WatchUnlockPanel.swift */; };
 		B094BA7E64F438D9546A504A /* TileCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44A831E492B794DB9C5D785 /* TileCamApp.swift */; };
 		B11CF1F9E8FE28514962F47A /* TileCamWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8537C6E5600023ECF3E40529 /* TileCamWatchApp.swift */; };
+		BA3906F0EDB56A24A597048F /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058E2B568F65B1BC64F74446 /* StoreManager.swift */; };
 		DDFE2B8B57070194796AC490 /* StreamTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00516D3FD64CB4FF244CCC0 /* StreamTileView.swift */; };
 		DF0314DFC40FF78972474BDA /* TileGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBCE6FEDDD03572ED8F70CA /* TileGridView.swift */; };
 		EB3B869F306C26E7B089F010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 806189DE7D7D0CC0C2D22C44 /* Assets.xcassets */; };
@@ -72,6 +75,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		058E2B568F65B1BC64F74446 /* StoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreManager.swift; sourceTree = "<group>"; };
 		0FF7321744C3B5ECB43E48EA /* PiPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiPManager.swift; sourceTree = "<group>"; };
 		1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassBackground.swift; sourceTree = "<group>"; };
 		18E8785D6B15F26FB5037751 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -88,6 +92,7 @@
 		6F4022B24DDBA44BB6797264 /* TileCamWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TileCamWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		709F3DEBC14B9B2B5B51FE0B /* CameraSnapshotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSnapshotView.swift; sourceTree = "<group>"; };
 		7527947D237D6DEA89275766 /* AudioSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionManager.swift; sourceTree = "<group>"; };
+		754733AD8EA61A62296D3792 /* WatchUnlockPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchUnlockPanel.swift; sourceTree = "<group>"; };
 		7AE1D87AD70C0BAF3DA78D03 /* AudioChunkPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChunkPlayer.swift; sourceTree = "<group>"; };
 		7CC2A5929CEDCB1CECBD6117 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		806189DE7D7D0CC0C2D22C44 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -110,6 +115,7 @@
 		D3563C36D319350555E97D8C /* PhoneSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSessionManager.swift; sourceTree = "<group>"; };
 		D6358E02DEFB2C1BD5298AC1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E038AE26150C1591BE8CB02C /* IntensityHeatmapAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntensityHeatmapAnalyzer.swift; sourceTree = "<group>"; };
+		E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPaywallView.swift; sourceTree = "<group>"; };
 		F64F3E0E7F4B87C096F6B872 /* WatchSettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsPanel.swift; sourceTree = "<group>"; };
 		FDDBE618E31C872A151196AE /* GlanceCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceCameraView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -138,6 +144,7 @@
 				D3563C36D319350555E97D8C /* PhoneSessionManager.swift */,
 				0FF7321744C3B5ECB43E48EA /* PiPManager.swift */,
 				88C1D43F8945033048962AA2 /* PlaybackOnlyAudioDevice.swift */,
+				058E2B568F65B1BC64F74446 /* StoreManager.swift */,
 				2959141B67B771756C647528 /* WebRTCClient.swift */,
 				928228BAF971EAB0F94F933E /* WebRTCFactory.swift */,
 			);
@@ -164,6 +171,7 @@
 				1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */,
 				A405F6453DFEB94D973D7E56 /* SettingsPanel.swift */,
 				F64F3E0E7F4B87C096F6B872 /* WatchSettingsPanel.swift */,
+				754733AD8EA61A62296D3792 /* WatchUnlockPanel.swift */,
 				1EEE3C654765AEA86034AACC /* WristBehaviorPicker.swift */,
 			);
 			path = Components;
@@ -203,6 +211,7 @@
 				5FBB2E49218EDC1AAB4EE1A2 /* CameraListView.swift */,
 				709F3DEBC14B9B2B5B51FE0B /* CameraSnapshotView.swift */,
 				FDDBE618E31C872A151196AE /* GlanceCameraView.swift */,
+				E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */,
 				6791C2F579AD4DD4450F019D /* WatchSettingsView.swift */,
 				A089E889ED84A3635B8E3AB0 /* WristBehaviorPickerWatch.swift */,
 			);
@@ -377,11 +386,13 @@
 				73622F9C278330644F58ACD6 /* PiPManager.swift in Sources */,
 				FB3F1D92557C85D8E6EDE46C /* PlaybackOnlyAudioDevice.swift in Sources */,
 				F01F33212AAD976B96399BBD /* SettingsPanel.swift in Sources */,
+				BA3906F0EDB56A24A597048F /* StoreManager.swift in Sources */,
 				25B2C098E2F6F9FDC3FA4402 /* Stream.swift in Sources */,
 				DDFE2B8B57070194796AC490 /* StreamTileView.swift in Sources */,
 				B094BA7E64F438D9546A504A /* TileCamApp.swift in Sources */,
 				DF0314DFC40FF78972474BDA /* TileGridView.swift in Sources */,
 				6EBB00E5A301B7EC7CD74978 /* WatchSettingsPanel.swift in Sources */,
+				A72BC5A238A3ACD549F5291A /* WatchUnlockPanel.swift in Sources */,
 				9461A979875765025A4239AB /* WebRTCClient.swift in Sources */,
 				7787C69321A1ECAD8393E47F /* WebRTCFactory.swift in Sources */,
 				39D702F16101F2D86AF9E5E9 /* WristBehaviorPicker.swift in Sources */,
@@ -398,6 +409,7 @@
 				FC2DB742CE80A0193F899FD4 /* ExtendedRuntimeManager.swift in Sources */,
 				FCC7976FB56FC41EC273CB2B /* GlanceCameraView.swift in Sources */,
 				B11CF1F9E8FE28514962F47A /* TileCamWatchApp.swift in Sources */,
+				5508B6BFB3F7C2555A011E22 /* WatchPaywallView.swift in Sources */,
 				875620623103B373B9C573A1 /* WatchSessionManager.swift in Sources */,
 				7A0542F8F242A36BAB2EA9EA /* WatchSettings.swift in Sources */,
 				82C9FFC24E38DC91600341A3 /* WatchSettingsView.swift in Sources */,

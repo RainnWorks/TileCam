@@ -19,6 +19,7 @@ schemes:
         TileCam: all
     run:
       config: Debug
+      storeKitConfiguration: TileCam.storekit
     archive:
       config: Release
   TileCamWatch:

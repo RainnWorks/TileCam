@@ -122,6 +122,28 @@ final class WatchSessionManager: NSObject, ObservableObject {
         log.info("Watch settings applied from iPhone")
     }
 
+    /// Applies the unlock entitlement pushed from the iPhone. On lock, tears
+    /// down any in-flight stream so the paywall shows immediately.
+    func applyUnlocked(_ unlocked: Bool) {
+        WatchSettings.shared.watchUnlocked = unlocked
+        if !unlocked {
+            tearDownForLock()
+        }
+    }
+
+    /// Stops streaming and clears state so the paywall can take over. Used when
+    /// the entitlement is revoked or the phone replies "locked" to a subscribe.
+    private func tearDownForLock() {
+        subscribeRetryTask?.cancel()
+        subscribeRetryTask = nil
+        isSubscribing = false
+        subscribedStream = nil
+        latestSnapshot = nil
+        lastFrameTime = nil
+        isStreamPaused = false
+        audioPlayer.stop()
+    }
+
     func syncSettingsToPhone() {
         guard let session, session.isReachable else { return }
         let s = WatchSettings.shared
@@ -216,7 +238,13 @@ final class WatchSessionManager: NSObject, ObservableObject {
             replyHandler: { [weak self] reply in
                 Task { @MainActor in
                     guard let self, self.subscribedStream == streamName else { return }
-                    if reply["status"] as? String == "ok" {
+                    let status = reply["status"] as? String
+                    if status == "locked" {
+                        // Phone says the Watch isn't unlocked — stop everything and
+                        // flip the cached flag so the paywall takes over.
+                        log.info("Subscribe rejected — Watch not unlocked")
+                        self.applyUnlocked(false)
+                    } else if status == "ok" {
                         log.info("Subscribe confirmed for \(streamName)")
                         self.isSubscribing = false
                     }
@@ -337,6 +365,9 @@ extension WatchSessionManager: WCSessionDelegate {
             if let behavior = ctx["wristBehavior"] as? String {
                 WatchSettings.shared.wristBehavior = behavior
             }
+            if let unlocked = ctx["watchUnlocked"] as? Bool {
+                WatchSettings.shared.watchUnlocked = unlocked
+            }
             self.applySettingsFromContext(ctx)
         }
     }
@@ -364,6 +395,9 @@ extension WatchSessionManager: WCSessionDelegate {
             }
             if let behavior = applicationContext["wristBehavior"] as? String {
                 WatchSettings.shared.wristBehavior = behavior
+            }
+            if let unlocked = applicationContext["watchUnlocked"] as? Bool {
+                self.applyUnlocked(unlocked)
             }
             self.applySettingsFromContext(applicationContext)
         }
@@ -428,6 +462,11 @@ extension WatchSessionManager: WCSessionDelegate {
                 if let value = message["value"] as? String {
                     WatchSettings.shared.wristBehavior = value
                     log.info("Wrist behavior updated: \(value)")
+                }
+            case "watchUnlocked":
+                if let value = message["value"] as? Bool {
+                    self.applyUnlocked(value)
+                    log.info("Watch unlock updated: \(value)")
                 }
             case "syncSettings":
                 self.applySettings(message)

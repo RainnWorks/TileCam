@@ -2,10 +2,12 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var store: StoreManager
     @ObservedObject private var phoneSession = PhoneSessionManager.shared
     @State private var showUI = true
     @State private var showServerInput = false
     @State private var showWatchSettings = false
+    @State private var showWatchUnlock = false
     @State private var showSettings = false
     @State private var hideTimer: Task<Void, Never>?
     @State private var animateTokens = false
@@ -68,6 +70,7 @@ struct ContentView: View {
                                     showSettings.toggle()
                                     showServerInput = false
                                     showWatchSettings = false
+                                    showWatchUnlock = false
                                 }
                                 keepUIVisible()
                             } label: {
@@ -85,6 +88,7 @@ struct ContentView: View {
                                         showWatchSettings.toggle()
                                         showServerInput = false
                                         showSettings = false
+                                        showWatchUnlock = false
                                     }
                                     keepUIVisible()
                                 } label: {
@@ -110,6 +114,7 @@ struct ContentView: View {
                                     showServerInput.toggle()
                                     showWatchSettings = false
                                     showSettings = false
+                                    showWatchUnlock = false
                                 }
                                 keepUIVisible()
                             } label: {
@@ -169,12 +174,25 @@ struct ContentView: View {
                         settingsPanel
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                     }
+
+                    // Watch unlock (paywall) overlay
+                    if showWatchUnlock {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.smooth(duration: 0.25)) { showWatchUnlock = false }
+                            }
+
+                        watchUnlockPanel
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
+                    }
                 }
             }
         }
         .animation(.smooth(duration: 0.25), value: showUI)
         .animation(.smooth(duration: 0.25), value: showServerInput)
         .animation(.smooth(duration: 0.25), value: showWatchSettings)
+        .animation(.smooth(duration: 0.25), value: showWatchUnlock)
         .animation(.smooth(duration: 0.25), value: showSettings)
         .task {
             await appState.refreshStreams()
@@ -269,7 +287,7 @@ struct ContentView: View {
         hideTimer = Task {
             try? await Task.sleep(for: autoHideDelay)
             guard !Task.isCancelled else { return }
-            if !showServerInput && !showWatchSettings && !showSettings {
+            if !showServerInput && !showWatchSettings && !showSettings && !showWatchUnlock {
                 withAnimation(.smooth(duration: 0.4)) {
                     showUI = false
                 }
@@ -314,9 +332,25 @@ struct ContentView: View {
             ),
             onDismiss: {
                 withAnimation(.smooth(duration: 0.25)) { showWatchSettings = false }
+            },
+            onUnlockTapped: {
+                withAnimation(.smooth(duration: 0.25)) {
+                    showWatchSettings = false
+                    showWatchUnlock = true
+                }
             }
         )
         .environmentObject(appState)
+        .environmentObject(store)
+    }
+
+    // MARK: - Watch Unlock Panel
+
+    private var watchUnlockPanel: some View {
+        WatchUnlockPanel(onDismiss: {
+            withAnimation(.smooth(duration: 0.25)) { showWatchUnlock = false }
+        })
+        .environmentObject(store)
     }
 
     // MARK: - Stream Token Panel

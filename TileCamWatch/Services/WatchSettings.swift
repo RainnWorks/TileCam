@@ -21,6 +21,11 @@ final class WatchSettings: ObservableObject {
     /// Synced from the iPhone app.
     @AppStorage("wristBehavior") var wristBehavior: String = "eco"
 
+    /// Whether the Apple Watch unlock IAP has been purchased. Synced from the
+    /// iPhone (source of truth). Cached so a standalone cold launch knows the
+    /// state before the phone connects. Defaults locked.
+    @AppStorage("watchUnlocked") var watchUnlocked: Bool = false
+
     /// Whether to keep audio playing when wrist is lowered.
     var keepAudioOnWristDown: Bool {
         wristBehavior == "audioOnly" || wristBehavior == "alwaysOn"

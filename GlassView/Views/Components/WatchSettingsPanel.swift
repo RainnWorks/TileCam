@@ -3,8 +3,10 @@ import SwiftUI
 /// Glass panel containing Watch-related settings for the iPhone app.
 struct WatchSettingsPanel: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var store: StoreManager
     @Binding var wristBehavior: WristBehavior
     var onDismiss: () -> Void
+    var onUnlockTapped: () -> Void
 
     @State private var visible = false
 
@@ -44,6 +46,12 @@ struct WatchSettingsPanel: View {
                     .accessibilityLabel("Close")
                 }
 
+                // Lock state
+                lockSection
+                    .opacity(visible ? 1 : 0)
+                    .offset(y: visible ? 0 : 6)
+                    .animation(.smooth(duration: 0.3).delay(visible ? 0.1 : 0), value: visible)
+
                 // Wrist behavior picker
                 WristBehaviorPicker(selection: $wristBehavior)
                     .opacity(visible ? 1 : 0)
@@ -73,6 +81,69 @@ struct WatchSettingsPanel: View {
         .glassBackground(cornerRadius: 24)
         .padding(.horizontal, 24)
         .onAppear { visible = true }
+    }
+
+    // MARK: - Lock State
+
+    @ViewBuilder
+    private var lockSection: some View {
+        if store.isWatchUnlocked {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
+                Text("Unlocked")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.green.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(.green.opacity(0.2), lineWidth: 0.5)
+                    )
+            )
+        } else {
+            Button {
+                onUnlockTapped()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "lock.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.5))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Unlock Apple Watch")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("Required to stream on your wrist.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.white.opacity(0.06))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(.white.opacity(0.15), lineWidth: 0.5)
+                        )
+                )
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Unlock Apple Watch")
+        }
     }
 
     // MARK: - Glance Mode

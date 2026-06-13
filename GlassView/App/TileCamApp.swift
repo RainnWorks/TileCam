@@ -21,12 +21,16 @@ struct TileCamApp: App {
         }
         // Activate WatchConnectivity early
         _ = PhoneSessionManager.shared
+        // Install the StoreKit transaction listener + refresh entitlements
+        // BEFORE the UI appears, so a revocation while closed is caught.
+        StoreManager.shared.start()
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .environmentObject(StoreManager.shared)
                 .preferredColorScheme(.dark)
                 .onAppear {
                     PiPManager.shared.onUserClose = { [weak appState] in
