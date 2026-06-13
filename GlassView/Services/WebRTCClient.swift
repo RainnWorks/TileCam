@@ -19,6 +19,12 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     @Published var videoTrack: RTCVideoTrack?
     @Published var audioTrack: RTCAudioTrack?
+    /// True once the video view has actually decoded and rendered a frame.
+    /// A `videoTrack` object can exist long before (or without) any media flowing,
+    /// so this is the real "video is live" signal used to gate the spinner.
+    @Published var videoReady = false
+    /// True when negotiation completed but the answer carried no usable audio track.
+    @Published var audioUnavailable = false
     @Published var audioLevel: Float = 0
     @Published var connectionState: RTCIceConnectionState = .new
     @Published var error: String?
@@ -31,11 +37,15 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     private var retryTask: Task<Void, Never>?
     private var audioLevelTimer: Task<Void, Never>?
+    private var frameWatchdog: Task<Void, Never>?
     private var isManuallyDisconnected = false
 
     private static let maxRetryDelay: TimeInterval = 30
     private static let baseRetryDelay: TimeInterval = 1
     private static let maxRetryCount = 20
+    /// How long to wait for a first decoded frame after negotiation before
+    /// treating the connection as wedged and retrying.
+    private static let firstFrameTimeout: TimeInterval = 10
 
     init(service: Go2RTCService, streamName: String) {
         self.factory = WebRTCFactory.shared.factory
@@ -59,6 +69,30 @@ final class WebRTCClient: NSObject, ObservableObject {
         error = nil
 
         await attemptConnection()
+    }
+
+    /// Called by the video view once a real decoded frame has rendered.
+    func markVideoReady() {
+        guard !videoReady else { return }
+        log.info("[\(self.streamName)] First video frame rendered")
+        videoReady = true
+        frameWatchdog?.cancel()
+        frameWatchdog = nil
+    }
+
+    /// Schedules a retry if no decoded video frame arrives within the timeout.
+    /// Guards against the "ICE connected but no media flows" wedge where the
+    /// peer connection never reports failure.
+    private func startFrameWatchdog() {
+        frameWatchdog?.cancel()
+        frameWatchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.firstFrameTimeout))
+            guard let self, !Task.isCancelled else { return }
+            guard !self.videoReady, self.videoTrack != nil else { return }
+            log.warning("[\(self.streamName)] No video frame after \(Self.firstFrameTimeout)s — retrying")
+            self.error = self.error ?? "No video received"
+            self.scheduleRetry()
+        }
     }
 
     private func attemptConnection() async {
@@ -120,6 +154,7 @@ final class WebRTCClient: NSObject, ObservableObject {
                 offerSDP: offer.sdp
             )
             log.info("[\(self.streamName)] Got SDP answer (\(answerSDP.count) bytes)")
+            log.info("[\(self.streamName)] Full answer SDP:\n\(answerSDP, privacy: .public)")
 
             let answer = RTCSessionDescription(type: .answer, sdp: answerSDP)
             try await pc.setRemoteDescription(answer)
@@ -128,7 +163,9 @@ final class WebRTCClient: NSObject, ObservableObject {
             // Extract tracks from transceivers (unified plan)
             for transceiver in pc.transceivers {
                 let track = transceiver.receiver.track
-                log.info("[\(self.streamName)] Transceiver: kind=\(track?.kind ?? "nil") readyState=\(track?.readyState.rawValue ?? -1)")
+                let mediaType = transceiver.mediaType == .audio ? "audio"
+                    : transceiver.mediaType == .video ? "video" : "other"
+                log.info("[\(self.streamName)] Transceiver mediaType=\(mediaType, privacy: .public) trackPresent=\(track != nil) trackKind=\(track?.kind ?? "nil", privacy: .public) readyState=\(track?.readyState.rawValue ?? -1)")
                 if let videoTrack = track as? RTCVideoTrack {
                     log.info("[\(self.streamName)] Found video track, isEnabled=\(videoTrack.isEnabled)")
                     videoTrack.isEnabled = true
@@ -141,8 +178,19 @@ final class WebRTCClient: NSObject, ObservableObject {
                 }
             }
 
+            // The answer is fully applied here: if no audio track was attached,
+            // this stream has no usable audio (go2rtc returned video-only).
+            audioUnavailable = (audioTrack == nil)
+            if audioUnavailable {
+                log.warning("[\(self.streamName)] No audio track in answer — audio unavailable")
+            }
+
             retryCount = 0
             error = nil
+
+            if videoTrack != nil {
+                startFrameWatchdog()
+            }
         } catch is CancellationError {
             log.info("[\(self.streamName)] Connection cancelled")
         } catch {
@@ -179,11 +227,15 @@ final class WebRTCClient: NSObject, ObservableObject {
     private func tearDownPeerConnection() {
         audioLevelTimer?.cancel()
         audioLevelTimer = nil
+        frameWatchdog?.cancel()
+        frameWatchdog = nil
         peerConnection?.delegate = nil
         peerConnection?.close()
         peerConnection = nil
         videoTrack = nil
         audioTrack = nil
+        videoReady = false
+        audioUnavailable = false
         audioLevel = 0
     }
 
@@ -193,6 +245,8 @@ final class WebRTCClient: NSObject, ObservableObject {
         retryTask = nil
         audioLevelTimer?.cancel()
         audioLevelTimer = nil
+        frameWatchdog?.cancel()
+        frameWatchdog = nil
         isRetrying = false
         retryCount = 0
         tearDownPeerConnection()
@@ -257,6 +311,9 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
                 log.info("[\(self.streamName)] Audio track assigned, isEnabled=\(self.isAudioEnabled)")
                 track.isEnabled = self.isAudioEnabled
                 self.audioTrack = track
+                // Audio actually arrived via this delegate path: clear any
+                // earlier "unavailable" marker set from the transceiver loop.
+                self.audioUnavailable = false
             }
         }
     }
