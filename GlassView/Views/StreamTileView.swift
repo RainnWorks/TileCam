@@ -126,6 +126,12 @@ struct StreamTileView: View {
                 WebRTCVideoView(videoTrack: videoTrack) {
                     client.markVideoReady()
                 }
+                // Test hook: present only once a real decoded frame has rendered,
+                // so UI tests can assert a tile reached the video-playing state
+                // (not merely "ICE connected").
+                .accessibilityIdentifier(
+                    client.videoReady ? "tile-\(stream.name)-playing" : "tile-\(stream.name)-video"
+                )
 
                 if motionMode != .off {
                     let (z, cx, cy) = currentNormalizedViewport()
@@ -627,6 +633,7 @@ struct StreamTileView: View {
         ProgressView()
             .tint(.white.opacity(0.6))
             .scaleEffect(0.8)
+            .accessibilityIdentifier("tile-\(stream.name)-connecting")
     }
 
     /// Deliberate "this camera is down" state. Orange (warning, not hard error) per
@@ -652,6 +659,7 @@ struct StreamTileView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("tile-\(stream.name)-unreachable")
         .accessibilityLabel("\(stream.name.replacingOccurrences(of: "_", with: " ")) unreachable. Tap to retry.")
     }
 

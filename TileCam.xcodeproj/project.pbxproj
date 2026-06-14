@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0250CB6F511F6F122AA9AA78 /* TileCam.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 458CF3AAAD97BF2D68FA8141 /* TileCam.storekit */; };
 		06F55BC1AEDA57073984F192 /* CameraListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FBB2E49218EDC1AAB4EE1A2 /* CameraListView.swift */; };
 		12CAD4FE3336683AD644FDE6 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 3025EDD3D923195DFB2AA356 /* WebRTC */; };
 		1638F83C880CA6E2CD0AEBA5 /* Go2RTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2029643D2311D3947CB7BE53 /* Go2RTCService.swift */; };
@@ -14,6 +15,7 @@
 		1A87E89A846B82FD8E087DA4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5245D77A923657A66BB2C3C2 /* PrivacyInfo.xcprivacy */; };
 		25B2C098E2F6F9FDC3FA4402 /* Stream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CC2A5929CEDCB1CECBD6117 /* Stream.swift */; };
 		30CC8FF95F8EF22BB5C03C0A /* IntensityHeatmapAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E038AE26150C1591BE8CB02C /* IntensityHeatmapAnalyzer.swift */; };
+		343C2E91D25C4B555E6AF04D /* WatchPaywallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F23D200BC6E943AFEEDFE7 /* WatchPaywallTests.swift */; };
 		39D702F16101F2D86AF9E5E9 /* WristBehaviorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEE3C654765AEA86034AACC /* WristBehaviorPicker.swift */; };
 		3EAF0AC2CCEF004F5C81B6E6 /* PhoneSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3563C36D319350555E97D8C /* PhoneSessionManager.swift */; };
 		4199C2DA076A70008435AE7E /* TileCamWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6F4022B24DDBA44BB6797264 /* TileCamWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -23,6 +25,7 @@
 		64418B09074B87E4321FE4CB /* WristBehaviorPickerWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A089E889ED84A3635B8E3AB0 /* WristBehaviorPickerWatch.swift */; };
 		657D107BEC12C8D5CF69C8D9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 18E8785D6B15F26FB5037751 /* PrivacyInfo.xcprivacy */; };
 		6EBB00E5A301B7EC7CD74978 /* WatchSettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F64F3E0E7F4B87C096F6B872 /* WatchSettingsPanel.swift */; };
+		6FE216CD157D6F011FA52FD4 /* TileCamUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 829113ABCDEB644A99805A15 /* TileCamUITestCase.swift */; };
 		73622F9C278330644F58ACD6 /* PiPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FF7321744C3B5ECB43E48EA /* PiPManager.swift */; };
 		74A1D7DC59FFE86BB4F79CF8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 890A2F48E217B8C64D81A676 /* ContentView.swift */; };
 		7787C69321A1ECAD8393E47F /* WebRTCFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 928228BAF971EAB0F94F933E /* WebRTCFactory.swift */; };
@@ -33,9 +36,11 @@
 		90574D5A765FFD0163F52566 /* MotionVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475FEC888AA354351E12C289 /* MotionVisualizationView.swift */; };
 		9461A979875765025A4239AB /* WebRTCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2959141B67B771756C647528 /* WebRTCClient.swift */; };
 		95D59AF0DE39B42B5B711E6C /* CameraSnapshotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709F3DEBC14B9B2B5B51FE0B /* CameraSnapshotView.swift */; };
+		9CEF3852620FA562AA8802E8 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63C3A7399519AF17932346C /* SmokeTests.swift */; };
 		A3E5C8C1FFB04C12BD915610 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F900FB47F9C78CFDE5C0A1E /* Assets.xcassets */; };
 		A700858E8D7DAA7E587EF49B /* GlassBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1776EFBA5E56FA03690B0C64 /* GlassBackground.swift */; };
 		A72BC5A238A3ACD549F5291A /* WatchUnlockPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754733AD8EA61A62296D3792 /* WatchUnlockPanel.swift */; };
+		AA7FFB6FE6E77F341D4692C4 /* ConnectionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE86BEB2D63674D095E36873 /* ConnectionFlowTests.swift */; };
 		B094BA7E64F438D9546A504A /* TileCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44A831E492B794DB9C5D785 /* TileCamApp.swift */; };
 		B11CF1F9E8FE28514962F47A /* TileCamWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8537C6E5600023ECF3E40529 /* TileCamWatchApp.swift */; };
 		BA3906F0EDB56A24A597048F /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 058E2B568F65B1BC64F74446 /* StoreManager.swift */; };
@@ -50,6 +55,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		20C1505762E60ACBE6693D02 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1CA3FF0756BEC0F46C74DE66 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DED5BE0EC1A27DD0963B7B36;
+			remoteInfo = TileCam;
+		};
 		51429B303CDB46E6677F8157 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1CA3FF0756BEC0F46C74DE66 /* Project object */;
@@ -82,7 +94,10 @@
 		2029643D2311D3947CB7BE53 /* Go2RTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Go2RTCService.swift; sourceTree = "<group>"; };
 		2959141B67B771756C647528 /* WebRTCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCClient.swift; sourceTree = "<group>"; };
 		2D98F2875332A2AABAC7D297 /* AudioWaveformIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveformIndicator.swift; sourceTree = "<group>"; };
+		36F23D200BC6E943AFEEDFE7 /* WatchPaywallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPaywallTests.swift; sourceTree = "<group>"; };
+		458CF3AAAD97BF2D68FA8141 /* TileCam.storekit */ = {isa = PBXFileReference; path = TileCam.storekit; sourceTree = "<group>"; };
 		475FEC888AA354351E12C289 /* MotionVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionVisualizationView.swift; sourceTree = "<group>"; };
+		4A92A2C14BCB88C6D8061FCE /* TileCamUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TileCamUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5245D77A923657A66BB2C3C2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		5FBB2E49218EDC1AAB4EE1A2 /* CameraListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraListView.swift; sourceTree = "<group>"; };
 		6791C2F579AD4DD4450F019D /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
@@ -95,6 +110,7 @@
 		7AE1D87AD70C0BAF3DA78D03 /* AudioChunkPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChunkPlayer.swift; sourceTree = "<group>"; };
 		7CC2A5929CEDCB1CECBD6117 /* Stream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stream.swift; sourceTree = "<group>"; };
 		806189DE7D7D0CC0C2D22C44 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		829113ABCDEB644A99805A15 /* TileCamUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCamUITestCase.swift; sourceTree = "<group>"; };
 		8537C6E5600023ECF3E40529 /* TileCamWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCamWatchApp.swift; sourceTree = "<group>"; };
 		87A984DF7431E19CA1EBFDCE /* WatchSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettings.swift; sourceTree = "<group>"; };
 		88C1D43F8945033048962AA2 /* PlaybackOnlyAudioDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackOnlyAudioDevice.swift; sourceTree = "<group>"; };
@@ -109,12 +125,14 @@
 		A405F6453DFEB94D973D7E56 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		A44A831E492B794DB9C5D785 /* TileCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCamApp.swift; sourceTree = "<group>"; };
 		A9230725F297FA88F5C769F2 /* MotionAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionAnalyzer.swift; sourceTree = "<group>"; };
+		AE86BEB2D63674D095E36873 /* ConnectionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionFlowTests.swift; sourceTree = "<group>"; };
 		B00516D3FD64CB4FF244CCC0 /* StreamTileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamTileView.swift; sourceTree = "<group>"; };
 		C2DB276A24AC98EF387EACC5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D3563C36D319350555E97D8C /* PhoneSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSessionManager.swift; sourceTree = "<group>"; };
 		D6358E02DEFB2C1BD5298AC1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E038AE26150C1591BE8CB02C /* IntensityHeatmapAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntensityHeatmapAnalyzer.swift; sourceTree = "<group>"; };
 		E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPaywallView.swift; sourceTree = "<group>"; };
+		F63C3A7399519AF17932346C /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		F64F3E0E7F4B87C096F6B872 /* WatchSettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -175,6 +193,17 @@
 			path = Components;
 			sourceTree = "<group>";
 		};
+		54DCD5FCF923D117B7BDDB7E /* TileCamUITests */ = {
+			isa = PBXGroup;
+			children = (
+				AE86BEB2D63674D095E36873 /* ConnectionFlowTests.swift */,
+				F63C3A7399519AF17932346C /* SmokeTests.swift */,
+				829113ABCDEB644A99805A15 /* TileCamUITestCase.swift */,
+				36F23D200BC6E943AFEEDFE7 /* WatchPaywallTests.swift */,
+			);
+			path = TileCamUITests;
+			sourceTree = "<group>";
+		};
 		57C6D313D2B3CE6E0E2CA01D /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -189,7 +218,9 @@
 		6C4CACA80D7A333A3B78FA56 = {
 			isa = PBXGroup;
 			children = (
+				458CF3AAAD97BF2D68FA8141 /* TileCam.storekit */,
 				910A16A41C0679343A99BDEB /* GlassView */,
+				54DCD5FCF923D117B7BDDB7E /* TileCamUITests */,
 				2A86706BCEFB2772EB106242 /* TileCamWatch */,
 				8B03DA015B4661CA2917EA81 /* Products */,
 			);
@@ -219,6 +250,7 @@
 			isa = PBXGroup;
 			children = (
 				A0B282F715B55C71ED245E57 /* TileCam.app */,
+				4A92A2C14BCB88C6D8061FCE /* TileCamUITests.xctest */,
 				6F4022B24DDBA44BB6797264 /* TileCamWatch.app */,
 			);
 			name = Products;
@@ -301,6 +333,25 @@
 			productReference = A0B282F715B55C71ED245E57 /* TileCam.app */;
 			productType = "com.apple.product-type.application";
 		};
+		EB7D63147EC9F7A495CD2459 /* TileCamUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4CF7179C7565813B8A8390E5 /* Build configuration list for PBXNativeTarget "TileCamUITests" */;
+			buildPhases = (
+				1472BAB1714B9F3CDB9BBD8A /* Sources */,
+				085DCB22DA94B6921AAA7434 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				690B89F753961DC1BC9F6901 /* PBXTargetDependency */,
+			);
+			name = TileCamUITests;
+			packageProductDependencies = (
+			);
+			productName = TileCamUITests;
+			productReference = 4A92A2C14BCB88C6D8061FCE /* TileCamUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -317,6 +368,11 @@
 					DED5BE0EC1A27DD0963B7B36 = {
 						DevelopmentTeam = YK42U4LDMG;
 						ProvisioningStyle = Automatic;
+					};
+					EB7D63147EC9F7A495CD2459 = {
+						DevelopmentTeam = YK42U4LDMG;
+						ProvisioningStyle = Automatic;
+						TestTargetID = DED5BE0EC1A27DD0963B7B36;
 					};
 				};
 			};
@@ -338,12 +394,21 @@
 			projectRoot = "";
 			targets = (
 				DED5BE0EC1A27DD0963B7B36 /* TileCam */,
+				EB7D63147EC9F7A495CD2459 /* TileCamUITests */,
 				98A92E91B980981B9EAB55A0 /* TileCamWatch */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		085DCB22DA94B6921AAA7434 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0250CB6F511F6F122AA9AA78 /* TileCam.storekit in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4E22C1BC732C6456CCAD8DA8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -365,6 +430,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		1472BAB1714B9F3CDB9BBD8A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA7FFB6FE6E77F341D4692C4 /* ConnectionFlowTests.swift in Sources */,
+				9CEF3852620FA562AA8802E8 /* SmokeTests.swift in Sources */,
+				6FE216CD157D6F011FA52FD4 /* TileCamUITestCase.swift in Sources */,
+				343C2E91D25C4B555E6AF04D /* WatchPaywallTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		579324234D980FB1FFFC7927 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -416,6 +492,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		690B89F753961DC1BC9F6901 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DED5BE0EC1A27DD0963B7B36 /* TileCam */;
+			targetProxy = 20C1505762E60ACBE6693D02 /* PBXContainerItemProxy */;
+		};
 		6D84C9E957F08A6B9000CC5C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 98A92E91B980981B9EAB55A0 /* TileCamWatch */;
@@ -444,6 +525,25 @@
 				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
+			};
+			name = Debug;
+		};
+		166F77A5E6E077EC83BF8C00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = YK42U4LDMG;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = works.rainn.tilecam.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TileCam;
 			};
 			name = Debug;
 		};
@@ -561,6 +661,25 @@
 			};
 			name = Debug;
 		};
+		AD8D369581F3EEE022814A82 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = YK42U4LDMG;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = works.rainn.tilecam.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TileCam;
+			};
+			name = Release;
+		};
 		FBD1D96FB1F4E4BEFFB732FB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -642,6 +761,15 @@
 			buildConfigurations = (
 				048427CA50DC1D92708AFA78 /* Debug */,
 				20459C1EAF1550BFF1D422DE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4CF7179C7565813B8A8390E5 /* Build configuration list for PBXNativeTarget "TileCamUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				166F77A5E6E077EC83BF8C00 /* Debug */,
+				AD8D369581F3EEE022814A82 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

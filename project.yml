@@ -17,9 +17,15 @@ schemes:
     build:
       targets:
         TileCam: all
+        TileCamUITests: [test]
     run:
       config: Debug
       storeKitConfiguration: TileCam.storekit
+    test:
+      config: Debug
+      testPlans:
+        - path: TileCam.xctestplan
+          defaultPlan: true
     archive:
       config: Release
   TileCamWatch:
@@ -56,6 +62,24 @@ targets:
       - target: TileCamWatch
         embed: watch2
         platforms: [iOS]
+
+  TileCamUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - TileCamUITests
+      - path: TileCam.storekit
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: works.rainn.tilecam.uitests
+        DEVELOPMENT_TEAM: YK42U4LDMG
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Automatic
+        TEST_TARGET_NAME: TileCam
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - target: TileCam
 
   TileCamWatch:
     type: application

@@ -15,6 +15,17 @@ struct ContentView: View {
     private let autoHideDelay: Duration = .seconds(4)
     private let haptic = UIImpactFeedbackGenerator(style: .light)
 
+    /// Whether to surface the Watch settings entry point. Normally gated on a
+    /// reachable paired Watch; under UI test (DEBUG + `-uiTestForceWatchUI`) we
+    /// force it on so the paywall/lock-state flow is queryable on a simulator
+    /// with no paired Watch. Zero effect in normal use.
+    private var watchUIAvailable: Bool {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "uiTestForceWatchUI") { return true }
+        #endif
+        return phoneSession.isWatchReachable
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -82,7 +93,7 @@ struct ContentView: View {
                             .contentShape(Rectangle())
                             .accessibilityLabel("Settings")
 
-                            if phoneSession.isWatchReachable {
+                            if watchUIAvailable {
                                 Button {
                                     withAnimation(.smooth(duration: 0.25)) {
                                         showWatchSettings.toggle()
@@ -106,6 +117,7 @@ struct ContentView: View {
                                 }
                                 .liquidGlassCircle()
                                 .contentShape(Rectangle())
+                                .accessibilityIdentifier("watch-settings-button")
                                 .accessibilityLabel("Watch settings")
                             }
 

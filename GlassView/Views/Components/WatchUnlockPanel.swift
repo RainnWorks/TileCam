@@ -127,6 +127,7 @@ struct WatchUnlockPanel: View {
                 .contentShape(Rectangle())
             }
             .disabled(store.isPurchasing || store.product == nil)
+            .accessibilityIdentifier("paywall-unlock-button")
             .accessibilityLabel("Unlock Apple Watch")
 
             Button {
@@ -181,6 +182,7 @@ struct WatchUnlockPanel: View {
                         .stroke(.green.opacity(0.2), lineWidth: 0.5)
                 )
         )
+        .accessibilityIdentifier("paywall-unlocked-confirmation")
     }
 
     // MARK: - Family Sharing

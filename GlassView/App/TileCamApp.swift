@@ -341,6 +341,9 @@ final class AppState: ObservableObject {
     private var watchObserver: Any?
 
     init() {
+        #if DEBUG
+        Self.applyUITestLaunchArguments()
+        #endif
         self.selectedStreams = LayoutStore.loadSelectedStreams()
         updateService()
         // Sync wrist behavior to Watch on launch
@@ -357,6 +360,30 @@ final class AppState: ObservableObject {
             self?.objectWillChange.send()
         }
     }
+
+    #if DEBUG
+    /// Test-only launch hook. When the app is launched by the UI test harness with
+    /// `-uiTestServerURL <url>` and/or `-uiTestStreams "name1,name2"`, this seeds the
+    /// backing UserDefaults BEFORE `loadSelectedStreams()`/`updateService()` run, so
+    /// the app boots straight into a deterministic server + selection without any UI
+    /// driving. Gated to DEBUG and keyed on arguments only present under test — it has
+    /// zero effect in normal use (the guards bail when the args are absent).
+    static func applyUITestLaunchArguments() {
+        let defaults = UserDefaults.standard
+        let args = UserDefaults.standard
+
+        if let server = args.string(forKey: "uiTestServerURL"), !server.isEmpty {
+            defaults.set(server, forKey: "serverURL")
+        }
+        if let streams = args.string(forKey: "uiTestStreams"), !streams.isEmpty {
+            let names = streams
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            defaults.set(names, forKey: "selectedStreamNames")
+        }
+    }
+    #endif
 
     private func updateService() {
         guard !serverURL.isEmpty, let url = URL(string: serverURL) else {

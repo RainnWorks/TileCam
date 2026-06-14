@@ -108,6 +108,7 @@ struct WatchSettingsPanel: View {
                             .stroke(.green.opacity(0.2), lineWidth: 0.5)
                     )
             )
+            .accessibilityIdentifier("watch-unlocked-confirmation")
         } else {
             Button {
                 onUnlockTapped()
@@ -142,6 +143,7 @@ struct WatchSettingsPanel: View {
                 )
                 .contentShape(Rectangle())
             }
+            .accessibilityIdentifier("watch-unlock-cta")
             .accessibilityLabel("Unlock Apple Watch")
         }
     }
