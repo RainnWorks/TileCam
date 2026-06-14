@@ -45,6 +45,14 @@ final class WebRTCClient: NSObject, ObservableObject {
     /// advance together but are reset at the same success points.
     private var consecutiveFailures = 0
 
+    /// Whether the negotiated answer expects to deliver video (the video
+    /// transceiver's currentDirection is recvOnly/sendRecv). Set per attempt.
+    /// Drives the first-frame watchdog so we keep restarting a stream that
+    /// negotiated video but renders no frame — even if the video track never
+    /// attached (the audio-came-through-but-no-video wedge). Stays false for
+    /// audio-only cameras so they are never retried forever.
+    private var videoExpected = false
+
     private var retryTask: Task<Void, Never>?
     private var audioLevelTimer: Task<Void, Never>?
     private var frameWatchdog: Task<Void, Never>?
@@ -122,7 +130,7 @@ final class WebRTCClient: NSObject, ObservableObject {
         frameWatchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.firstFrameTimeout))
             guard let self, !Task.isCancelled else { return }
-            guard !self.videoReady, self.videoTrack != nil else { return }
+            guard !self.videoReady, self.videoExpected else { return }
             log.warning("[\(self.streamName)] No video frame after \(Self.firstFrameTimeout)s — retrying")
             self.error = self.error ?? "No video received"
             self.scheduleRetry()
@@ -223,10 +231,15 @@ final class WebRTCClient: NSObject, ObservableObject {
                 log.warning("[\(self.streamName)] Answer negotiated no audio direction — audio unavailable")
             }
 
+            self.videoExpected = videoExpected(in: pc)
+
             retryCount = 0
             error = nil
 
-            if videoTrack != nil {
+            // Arm whenever the answer negotiated video, even if the track hasn't
+            // attached yet: the "audio came through but no video" wedge is exactly
+            // the case where video is expected but no track/frame ever arrives.
+            if videoExpected {
                 startFrameWatchdog()
             }
         } catch is CancellationError {
@@ -279,6 +292,20 @@ final class WebRTCClient: NSObject, ObservableObject {
         return false
     }
 
+    /// Whether the negotiated answer expects to deliver video, read from the
+    /// video transceiver's negotiated `currentDirection` (recvOnly / sendRecv).
+    private func videoExpected(in pc: RTCPeerConnection) -> Bool {
+        for transceiver in pc.transceivers where transceiver.mediaType == .video {
+            var direction: RTCRtpTransceiverDirection = .inactive
+            // currentDirection returns NO if never negotiated / stopped.
+            guard transceiver.currentDirection(&direction) else { continue }
+            if direction == .recvOnly || direction == .sendRecv {
+                return true
+            }
+        }
+        return false
+    }
+
     private func startAudioLevelPolling() {
         audioLevelTimer?.cancel()
         audioLevelTimer = Task { [weak self] in
@@ -315,6 +342,7 @@ final class WebRTCClient: NSObject, ObservableObject {
         audioTrack = nil
         videoReady = false
         audioUnavailable = false
+        videoExpected = false
         audioLevel = 0
     }
 
@@ -455,6 +483,13 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
                 self.consecutiveFailures = 0
                 self.isUnreachable = false
                 self.error = nil
+                // Cover the "ICE connected but no media flows" wedge where the
+                // track is missing or attached-but-delivers-no-frame: if video
+                // was negotiated and still isn't live, (re)arm the watchdog so a
+                // silent video failure still drives a restart.
+                if self.videoExpected, !self.videoReady, self.frameWatchdog == nil {
+                    self.startFrameWatchdog()
+                }
             case .failed:
                 log.error("[\(self.streamName)] ICE failed")
                 self.error = self.error ?? "ICE connection failed"
