@@ -39,6 +39,11 @@ final class WebRTCClient: NSObject, ObservableObject {
     private var audioLevelTimer: Task<Void, Never>?
     private var frameWatchdog: Task<Void, Never>?
     private var isManuallyDisconnected = false
+    /// True from the moment a connection attempt starts until the peer connection
+    /// is torn down (disconnect, or a retry that re-runs attemptConnection). Used to
+    /// make `connect()` idempotent: a duplicate call while a connection is in-flight
+    /// or already established must be a no-op, never a tear-down-and-restart.
+    private var isActive = false
 
     private static let maxRetryDelay: TimeInterval = 30
     private static let baseRetryDelay: TimeInterval = 1
@@ -60,7 +65,19 @@ final class WebRTCClient: NSObject, ObservableObject {
     }
 
     func connect() async {
+        // Idempotent: cold start rebuilds the tile once, re-running its `.task`
+        // and firing connect() twice ~20ms apart. Tearing down a mid-negotiation
+        // peer connection on the duplicate call ("set remote answer ... wrong
+        // state: closed") re-rolls the track-attach race, so a duplicate connect()
+        // while an attempt is in-flight or already connected is a no-op here.
+        // A genuine reconnect goes through disconnect() (clears isActive) or the
+        // retry path, so this guard never blocks recovery.
+        guard !isActive else {
+            log.info("[\(self.streamName)] connect() ignored — already active")
+            return
+        }
         log.info("[\(self.streamName)] connect() called")
+        isActive = true
         isManuallyDisconnected = false
         retryTask?.cancel()
         retryTask = nil
@@ -160,29 +177,33 @@ final class WebRTCClient: NSObject, ObservableObject {
             try await pc.setRemoteDescription(answer)
             log.info("[\(self.streamName)] Remote description set — waiting for ICE")
 
-            // Extract tracks from transceivers (unified plan)
+            // Best-effort fast path: tracks are often already wired on the
+            // receivers by the time setRemoteDescription returns. The canonical
+            // assignment point is the unified-plan delegate (didStartReceiving /
+            // didAddReceiver), which fires once libwebrtc has actually wired them.
+            // Both routes funnel through the idempotent assign* helpers, so a track
+            // attached here and re-reported by the delegate is a no-op.
             for transceiver in pc.transceivers {
                 let track = transceiver.receiver.track
                 let mediaType = transceiver.mediaType == .audio ? "audio"
                     : transceiver.mediaType == .video ? "video" : "other"
                 log.info("[\(self.streamName)] Transceiver mediaType=\(mediaType, privacy: .public) trackPresent=\(track != nil) trackKind=\(track?.kind ?? "nil", privacy: .public) readyState=\(track?.readyState.rawValue ?? -1)")
                 if let videoTrack = track as? RTCVideoTrack {
-                    log.info("[\(self.streamName)] Found video track, isEnabled=\(videoTrack.isEnabled)")
-                    videoTrack.isEnabled = true
-                    self.videoTrack = videoTrack
+                    assignVideoTrack(videoTrack)
                 } else if let audioTrack = track as? RTCAudioTrack {
-                    log.info("[\(self.streamName)] Found audio track, setting isEnabled=\(self.isAudioEnabled)")
-                    audioTrack.isEnabled = self.isAudioEnabled
-                    self.audioTrack = audioTrack
-                    startAudioLevelPolling()
+                    assignAudioTrack(audioTrack)
                 }
             }
 
-            // The answer is fully applied here: if no audio track was attached,
-            // this stream has no usable audio (go2rtc returned video-only).
-            audioUnavailable = (audioTrack == nil)
+            // Derive audio availability deterministically from the negotiated
+            // answer (the transceiver's currentDirection), NOT from whether a
+            // track object happened to be wired yet. This avoids latching a false
+            // "unavailable" when audio is expected but the track arrives a beat
+            // later via the delegate. Once a track is assigned, assignAudioTrack
+            // clears this flag and it is never re-latched.
+            audioUnavailable = !audioExpected(in: pc)
             if audioUnavailable {
-                log.warning("[\(self.streamName)] No audio track in answer — audio unavailable")
+                log.warning("[\(self.streamName)] Answer negotiated no audio direction — audio unavailable")
             }
 
             retryCount = 0
@@ -198,6 +219,47 @@ final class WebRTCClient: NSObject, ObservableObject {
             self.error = error.localizedDescription
             scheduleRetry()
         }
+    }
+
+    // MARK: - Track assignment (idempotent)
+
+    /// Canonical, idempotent video-track assignment. Safe to call from the
+    /// synchronous fast-path, the unified-plan delegates, and the legacy
+    /// `didAdd stream` path — assigns only when the track actually changes.
+    private func assignVideoTrack(_ track: RTCVideoTrack) {
+        guard videoTrack !== track else { return }
+        log.info("[\(self.streamName)] Video track assigned")
+        track.isEnabled = true
+        videoTrack = track
+    }
+
+    /// Canonical, idempotent audio-track assignment. On assignment it clears any
+    /// earlier `audioUnavailable` marker, re-applies the current mute state, and
+    /// starts level polling if it isn't already running.
+    private func assignAudioTrack(_ track: RTCAudioTrack) {
+        guard audioTrack !== track else { return }
+        log.info("[\(self.streamName)] Audio track assigned, isEnabled=\(self.isAudioEnabled)")
+        track.isEnabled = isAudioEnabled
+        audioTrack = track
+        // A real audio track arrived: it is by definition available.
+        audioUnavailable = false
+        if audioLevelTimer == nil {
+            startAudioLevelPolling()
+        }
+    }
+
+    /// Whether the negotiated answer expects to deliver audio, read from the
+    /// audio transceiver's negotiated `currentDirection` (recvOnly / sendRecv).
+    private func audioExpected(in pc: RTCPeerConnection) -> Bool {
+        for transceiver in pc.transceivers where transceiver.mediaType == .audio {
+            var direction: RTCRtpTransceiverDirection = .inactive
+            // currentDirection returns NO if never negotiated / stopped.
+            guard transceiver.currentDirection(&direction) else { continue }
+            if direction == .recvOnly || direction == .sendRecv {
+                return true
+            }
+        }
+        return false
     }
 
     private func startAudioLevelPolling() {
@@ -241,6 +303,7 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     func disconnect() {
         isManuallyDisconnected = true
+        isActive = false
         retryTask?.cancel()
         retryTask = nil
         audioLevelTimer?.cancel()
@@ -261,6 +324,9 @@ final class WebRTCClient: NSObject, ObservableObject {
             log.error("[\(self.streamName)] Max retries (\(Self.maxRetryCount)) reached, giving up")
             error = "Connection failed after \(Self.maxRetryCount) attempts"
             isRetrying = false
+            // We've stopped trying; allow a manual connect() (retry button) to
+            // start a fresh attempt rather than no-op against a dead connection.
+            isActive = false
             return
         }
 
@@ -300,20 +366,43 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
         log.info("[delegate] Signaling state: \(String(describing: stateChanged))")
     }
 
+    // Legacy Plan-B path. Unified plan does NOT reliably fire this; kept as a
+    // best-effort fallback, funneled through the same idempotent helpers.
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
         log.info("[delegate] Stream added — video tracks: \(stream.videoTracks.count), audio tracks: \(stream.audioTracks.count)")
+        let videoTrack = stream.videoTracks.first
+        let audioTrack = stream.audioTracks.first
         Task { @MainActor in
-            if let track = stream.videoTracks.first {
-                log.info("[\(self.streamName)] Video track assigned")
-                self.videoTrack = track
+            if let videoTrack { self.assignVideoTrack(videoTrack) }
+            if let audioTrack { self.assignAudioTrack(audioTrack) }
+        }
+    }
+
+    // MARK: Unified-plan track delivery (canonical assignment point)
+
+    /// Fires once libwebrtc has wired the receiver's track for a transceiver —
+    /// the reliable signal under unified plan that media is about to flow.
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
+        let track = transceiver.receiver.track
+        log.info("[delegate] didStartReceivingOn mediaType=\(transceiver.mediaType.rawValue) trackKind=\(track?.kind ?? "nil", privacy: .public)")
+        Task { @MainActor in
+            if let videoTrack = track as? RTCVideoTrack {
+                self.assignVideoTrack(videoTrack)
+            } else if let audioTrack = track as? RTCAudioTrack {
+                self.assignAudioTrack(audioTrack)
             }
-            if let track = stream.audioTracks.first {
-                log.info("[\(self.streamName)] Audio track assigned, isEnabled=\(self.isAudioEnabled)")
-                track.isEnabled = self.isAudioEnabled
-                self.audioTrack = track
-                // Audio actually arrived via this delegate path: clear any
-                // earlier "unavailable" marker set from the transceiver loop.
-                self.audioUnavailable = false
+        }
+    }
+
+    /// Fires when a receiver and its track are created (unified plan).
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
+        let track = rtpReceiver.track
+        log.info("[delegate] didAddReceiver trackKind=\(track?.kind ?? "nil", privacy: .public)")
+        Task { @MainActor in
+            if let videoTrack = track as? RTCVideoTrack {
+                self.assignVideoTrack(videoTrack)
+            } else if let audioTrack = track as? RTCAudioTrack {
+                self.assignAudioTrack(audioTrack)
             }
         }
     }

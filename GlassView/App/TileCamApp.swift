@@ -406,10 +406,15 @@ final class AppState: ObservableObject {
                     // the user's persisted selection.
                     if !streams.isEmpty {
                         let validNames = Set(streams.map(\.name))
-                        let before = self.selectedStreams.count
-                        self.selectedStreams.removeAll { !validNames.contains($0.name) }
-                        if self.selectedStreams.count != before {
-                            log.info("Removed \(before - self.selectedStreams.count) stale selected streams")
+                        // Only reassign when something is actually stale.
+                        // `removeAll(where:)` fires the @Published didSet even when
+                        // it removes nothing, and that spurious objectWillChange
+                        // re-evaluates TileGridView and re-runs each tile's `.task`
+                        // — re-rolling the WebRTC connect race on every cold start.
+                        let pruned = self.selectedStreams.filter { validNames.contains($0.name) }
+                        if pruned.count != self.selectedStreams.count {
+                            log.info("Removed \(self.selectedStreams.count - pruned.count) stale selected streams")
+                            self.selectedStreams = pruned
                         }
                     }
                     return
