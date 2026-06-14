@@ -30,10 +30,20 @@ final class WebRTCClient: NSObject, ObservableObject {
     @Published var error: String?
     @Published var isRetrying = false
     @Published private(set) var retryCount = 0
+    /// True once the stream has failed to connect `unreachableThreshold` times in a
+    /// row. Surfaced as a deliberate "camera unreachable" state instead of an endless
+    /// spinner, while retries keep running underneath so it auto-recovers when the
+    /// upstream source returns. Cleared on the next successful connection.
+    @Published var isUnreachable = false
 
     var isAudioEnabled: Bool = true {
         didSet { audioTrack?.isEnabled = isAudioEnabled }
     }
+
+    /// Consecutive connection-failure count (reset on any success). Distinct from
+    /// `retryCount` only in that it is the signal for the unreachable state; both
+    /// advance together but are reset at the same success points.
+    private var consecutiveFailures = 0
 
     private var retryTask: Task<Void, Never>?
     private var audioLevelTimer: Task<Void, Never>?
@@ -48,6 +58,11 @@ final class WebRTCClient: NSObject, ObservableObject {
     private static let maxRetryDelay: TimeInterval = 30
     private static let baseRetryDelay: TimeInterval = 1
     private static let maxRetryCount = 20
+    /// How many consecutive connection failures before the tile flips to the
+    /// "camera unreachable" state. Small enough (3) that a genuinely dead source
+    /// shows within the first few seconds of backoff, well before the 20-retry
+    /// give-up — so a dead camera never masquerades as a slow-connecting one.
+    private static let unreachableThreshold = 3
     /// How long to wait for a first decoded frame after negotiation before
     /// treating the connection as wedged and retrying.
     private static let firstFrameTimeout: TimeInterval = 10
@@ -82,7 +97,9 @@ final class WebRTCClient: NSObject, ObservableObject {
         retryTask?.cancel()
         retryTask = nil
         retryCount = 0
+        consecutiveFailures = 0
         isRetrying = false
+        isUnreachable = false
         error = nil
 
         await attemptConnection()
@@ -320,6 +337,16 @@ final class WebRTCClient: NSObject, ObservableObject {
 
     private func scheduleRetry() {
         guard !isManuallyDisconnected else { return }
+
+        // Count this failure for the unreachable state. Done before the max-retry
+        // guard so the threshold is always reached, and kept retrying afterwards so
+        // the camera auto-recovers when its upstream source comes back.
+        consecutiveFailures += 1
+        if consecutiveFailures >= Self.unreachableThreshold && !isUnreachable {
+            log.warning("[\(self.streamName)] \(self.consecutiveFailures) consecutive failures — marking unreachable")
+            isUnreachable = true
+        }
+
         guard retryCount < Self.maxRetryCount else {
             log.error("[\(self.streamName)] Max retries (\(Self.maxRetryCount)) reached, giving up")
             error = "Connection failed after \(Self.maxRetryCount) attempts"
@@ -425,6 +452,8 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
                 log.info("[\(self.streamName)] ICE connected!")
                 self.isRetrying = false
                 self.retryCount = 0
+                self.consecutiveFailures = 0
+                self.isUnreachable = false
                 self.error = nil
             case .failed:
                 log.error("[\(self.streamName)] ICE failed")

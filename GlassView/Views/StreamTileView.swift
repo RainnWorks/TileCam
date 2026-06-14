@@ -85,6 +85,7 @@ struct StreamTileView: View {
         .animation(.smooth(duration: 0.4), value: client.videoReady)
         .animation(.smooth(duration: 0.25), value: isStreamAudible)
         .animation(.smooth(duration: 0.25), value: client.audioUnavailable)
+        .animation(.smooth(duration: 0.3), value: client.isUnreachable)
         .onChange(of: client.connectionState) { _, newState in
             if newState == .failed || newState == .disconnected {
                 wasDisconnected = true
@@ -172,25 +173,35 @@ struct StreamTileView: View {
 
     @ViewBuilder
     private var statusOverlay: some View {
-        switch client.connectionState {
-        case .connected, .completed:
-            // ICE is up, but keep the spinner until a real frame actually
-            // renders — "ICE connected" does not mean media is flowing.
-            if !client.videoReady {
+        // A camera whose upstream source is down trips `isUnreachable` within the
+        // first few seconds of retries. Show a deliberate "down" message instead of
+        // the connecting spinner — but keep retrying underneath, so it clears itself
+        // the moment the source returns. Takes precedence over the connection-state
+        // spinner, which would otherwise read as "still connecting" forever.
+        if client.isUnreachable && !client.videoReady {
+            unreachableOverlay
+                .transition(.opacity)
+        } else {
+            switch client.connectionState {
+            case .connected, .completed:
+                // ICE is up, but keep the spinner until a real frame actually
+                // renders — "ICE connected" does not mean media is flowing.
+                if !client.videoReady {
+                    connectingOverlay
+                        .transition(.opacity)
+                }
+            case .failed:
+                failedOverlay
+            case .disconnected:
+                statusCenter(icon: "wifi.slash", label: "Disconnected", color: .orange)
+            case .new, .checking:
                 connectingOverlay
                     .transition(.opacity)
+            case .closed:
+                statusCenter(icon: "xmark.circle", label: "Stream ended", color: .secondary)
+            @unknown default:
+                EmptyView()
             }
-        case .failed:
-            failedOverlay
-        case .disconnected:
-            statusCenter(icon: "wifi.slash", label: "Disconnected", color: .orange)
-        case .new, .checking:
-            connectingOverlay
-                .transition(.opacity)
-        case .closed:
-            statusCenter(icon: "xmark.circle", label: "Stream ended", color: .secondary)
-        @unknown default:
-            EmptyView()
         }
     }
 
@@ -616,6 +627,32 @@ struct StreamTileView: View {
         ProgressView()
             .tint(.white.opacity(0.6))
             .scaleEffect(0.8)
+    }
+
+    /// Deliberate "this camera is down" state. Orange (warning, not hard error) per
+    /// .impeccable.md, tappable to force a fresh connect() while retries continue
+    /// underneath. Reads as a status message, not an error-flash.
+    private var unreachableOverlay: some View {
+        Button {
+            zoomHaptic.impactOccurred()
+            Task { await client.connect() }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.title3)
+                    .foregroundStyle(.orange.opacity(0.7))
+                Text("Camera unreachable")
+                    .font(.system(size: 10).weight(.medium))
+                    .foregroundStyle(.orange.opacity(0.7))
+                Text(stream.name.replacingOccurrences(of: "_", with: " "))
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(stream.name.replacingOccurrences(of: "_", with: " ")) unreachable. Tap to retry.")
     }
 
     private var failedOverlay: some View {
