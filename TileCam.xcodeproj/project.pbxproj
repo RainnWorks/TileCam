@@ -47,7 +47,6 @@
 		FA107006D1AD90D2C4C1890D /* MotionFlowAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69613F4BA57BE00DA4FDED70 /* MotionFlowAnalyzer.swift */; };
 		FB3F1D92557C85D8E6EDE46C /* PlaybackOnlyAudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88C1D43F8945033048962AA2 /* PlaybackOnlyAudioDevice.swift */; };
 		FC2DB742CE80A0193F899FD4 /* ExtendedRuntimeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1FBFCC7989DD4A291DD653F /* ExtendedRuntimeManager.swift */; };
-		FCC7976FB56FC41EC273CB2B /* GlanceCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDDBE618E31C872A151196AE /* GlanceCameraView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -117,7 +116,6 @@
 		E038AE26150C1591BE8CB02C /* IntensityHeatmapAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntensityHeatmapAnalyzer.swift; sourceTree = "<group>"; };
 		E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPaywallView.swift; sourceTree = "<group>"; };
 		F64F3E0E7F4B87C096F6B872 /* WatchSettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsPanel.swift; sourceTree = "<group>"; };
-		FDDBE618E31C872A151196AE /* GlanceCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlanceCameraView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -210,7 +208,6 @@
 			children = (
 				5FBB2E49218EDC1AAB4EE1A2 /* CameraListView.swift */,
 				709F3DEBC14B9B2B5B51FE0B /* CameraSnapshotView.swift */,
-				FDDBE618E31C872A151196AE /* GlanceCameraView.swift */,
 				E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */,
 				6791C2F579AD4DD4450F019D /* WatchSettingsView.swift */,
 				A089E889ED84A3635B8E3AB0 /* WristBehaviorPickerWatch.swift */,
@@ -407,7 +404,6 @@
 				06F55BC1AEDA57073984F192 /* CameraListView.swift in Sources */,
 				95D59AF0DE39B42B5B711E6C /* CameraSnapshotView.swift in Sources */,
 				FC2DB742CE80A0193F899FD4 /* ExtendedRuntimeManager.swift in Sources */,
-				FCC7976FB56FC41EC273CB2B /* GlanceCameraView.swift in Sources */,
 				B11CF1F9E8FE28514962F47A /* TileCamWatchApp.swift in Sources */,
 				5508B6BFB3F7C2555A011E22 /* WatchPaywallView.swift in Sources */,
 				875620623103B373B9C573A1 /* WatchSessionManager.swift in Sources */,
