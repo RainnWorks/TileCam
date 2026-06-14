@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support — TileCam</title>
+<meta name="description" content="TileCam support: getting started with go2rtc, troubleshooting connections, audio, and the Apple Watch unlock, and how to contact us.">
+<meta name="theme-color" content="#000000">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="nav-scrim"></div>
+<nav class="nav">
+  <a class="brand" href="index.html"><span class="dot"></span> TileCam</a>
+  <div class="nav-links">
+    <a href="index.html" class="hide-sm">Home</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="terms.html">Terms</a>
+  </div>
+</nav>
+
+<main class="doc">
+  <div class="eyebrow">TileCam</div>
+  <h1>Support</h1>
+  <div class="updated">We're happy to help.</div>
+
+  <p class="lead">TileCam shows live camera feeds from your own go2rtc / WebRTC server on your iPhone, iPad, Mac, and Apple Watch.</p>
+
+  <h2>Getting started</h2>
+  <ul>
+    <li>Set up a <a href="https://github.com/AlexxIT/go2rtc">go2rtc</a> server and add your cameras to it.</li>
+    <li>In TileCam, enter your server's address (for example <code>http://192.168.1.100:1984</code>) and tap <strong>Connect</strong>.</li>
+    <li>Pick the cameras you want to see — they appear as live tiles.</li>
+  </ul>
+
+  <h2>Troubleshooting</h2>
+  <div class="faq">
+    <details>
+      <summary>No cameras or tiles appear after connecting</summary>
+      <p>Double-check the server address and that the server is reachable from your device's network. TileCam automatically retries the connection on launch and when you return to the app; you can also tap <strong>Retry</strong> on the "Cannot reach server" screen.</p>
+    </details>
+    <details>
+      <summary>A camera has no sound</summary>
+      <p>Audio is per-stream and can be muted. Tap the audio / waveform control on that camera's tile to unmute it. If a camera truly has no audio source, that's a setting on the camera or go2rtc side, not TileCam.</p>
+    </details>
+    <details>
+      <summary>One camera shows a spinner but never loads video</summary>
+      <p>If a camera's source is unreachable, the tile will show a clear "Camera unreachable" message and keep retrying in the background — it recovers on its own once the source is back. If video is briefly slow to appear while others load, TileCam will reconnect that camera automatically until the picture comes through.</p>
+    </details>
+    <details>
+      <summary>Streaming keeps running when I leave the app</summary>
+      <p>When you background TileCam while viewing, the camera keeps floating in Picture-in-Picture by design. To stop it completely, close the PiP window — the app then suspends fully.</p>
+    </details>
+    <details>
+      <summary>The Apple Watch app asks me to unlock</summary>
+      <p>The Watch companion is a one-time purchase. Buy or <strong>restore</strong> it from the iPhone app's Watch settings; the unlock then syncs to your Watch.</p>
+    </details>
+    <details>
+      <summary>Local-network permission</summary>
+      <p>TileCam needs local-network access to reach cameras on your home network. If you declined it, enable it in iOS Settings → TileCam.</p>
+    </details>
+  </div>
+
+  <h2>Contact us</h2>
+  <p>Email <a href="mailto:thomas@rainn.works">thomas@rainn.works</a> and we'll help. Including your device model and iOS / watchOS version speeds things up.</p>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="dot"></span> TileCam</a>
+    <div class="footer-links">
+      <a href="privacy.html">Privacy</a>
+      <a href="support.html">Support</a>
+      <a href="terms.html">Terms</a>
+    </div>
+    <div class="copy">© 2026 RainnWorks</div>
+  </div>
+</footer>
+
+</body>
+</html>
