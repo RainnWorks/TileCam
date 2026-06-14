@@ -54,8 +54,10 @@ final class ConnectionFlowTests: TileCamUITestCase {
         )
     }
 
+    #if !targetEnvironment(macCatalyst)
     /// Backgrounding and reactivating should recover the tiles to video,
     /// validating the foreground reconnect/refresh path in TileCamApp.
+    /// iOS-only: XCUIDevice.press(.home) is unavailable on Mac Catalyst.
     func testBackgroundForegroundRecovery() {
         let app = makeApp(streams: ["mia_room", "kitchen"])
         app.launch()
@@ -96,4 +98,5 @@ final class ConnectionFlowTests: TileCamUITestCase {
             "kitchen did not recover to video after foregrounding"
         )
     }
+    #endif
 }
