@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox is required for the Mac App Store. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Outbound connections to the user's go2rtc server (HTTP negotiation). -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- WebRTC ICE binds local UDP sockets and receives inbound media from the
+	     camera/go2rtc peer; the sandbox treats that as listening, so without this
+	     ICE fails and video never connects even though HTTP negotiation succeeds. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- Microphone for two-way WebRTC audio with cameras that support it. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

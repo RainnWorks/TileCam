@@ -54,6 +54,9 @@ targets:
         DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: false
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
         TARGETED_DEVICE_FAMILY: "1,2,6"
+        # App Sandbox (+ network client, mic) is required for the Mac App Store.
+        # Scoped to the macOS SDK so the iOS build keeps its own (default) entitlements.
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": TileCam.macOS.entitlements
         DEVELOPMENT_TEAM: YK42U4LDMG
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: Automatic
