@@ -61,7 +61,7 @@ targets:
       - package: WebRTC
       - target: TileCamWatch
         embed: watch2
-        platforms: [iOS]
+        platformFilter: iOS
 
   TileCamUITests:
     type: bundle.ui-testing

@@ -18,7 +18,7 @@
 		343C2E91D25C4B555E6AF04D /* WatchPaywallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F23D200BC6E943AFEEDFE7 /* WatchPaywallTests.swift */; };
 		39D702F16101F2D86AF9E5E9 /* WristBehaviorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEE3C654765AEA86034AACC /* WristBehaviorPicker.swift */; };
 		3EAF0AC2CCEF004F5C81B6E6 /* PhoneSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3563C36D319350555E97D8C /* PhoneSessionManager.swift */; };
-		4199C2DA076A70008435AE7E /* TileCamWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6F4022B24DDBA44BB6797264 /* TileCamWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4199C2DA076A70008435AE7E /* TileCamWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6F4022B24DDBA44BB6797264 /* TileCamWatch.app */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4E2C4865B271C3577E590811 /* EulerianMagnifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5CBE2E3AABF8089C9CB27B /* EulerianMagnifier.swift */; };
 		5508B6BFB3F7C2555A011E22 /* WatchPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */; };
 		568D24402C66DFF0F7BACB0B /* MotionAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9230725F297FA88F5C769F2 /* MotionAnalyzer.swift */; };
@@ -499,6 +499,7 @@
 		};
 		6D84C9E957F08A6B9000CC5C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = 98A92E91B980981B9EAB55A0 /* TileCamWatch */;
 			targetProxy = 51429B303CDB46E6677F8157 /* PBXContainerItemProxy */;
 		};
