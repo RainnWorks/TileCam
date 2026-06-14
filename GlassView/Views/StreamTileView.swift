@@ -97,6 +97,9 @@ struct StreamTileView: View {
                 }
             }
         }
+        .onChange(of: contentSize) { _, newSize in
+            healTransformIfNeeded(for: newSize)
+        }
         .onChange(of: appState.isGlobalAudioEnabled) { _, _ in syncAudioState() }
         .onChange(of: appState.mutedStreamNames) { _, _ in syncAudioState() }
         .onChange(of: client.audioTrack) { _, _ in syncAudioState() }
@@ -328,12 +331,43 @@ struct StreamTileView: View {
                         )
                         .animation(.smooth(duration: 0.2), value: zoomText)
                 }
+
+                if transform != .identity {
+                    recenterButton
+                }
             }
             .padding(6)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: transform == .identity)
         }
         .transition(.opacity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(stream.name.replacingOccurrences(of: "_", with: " ")), \(stateLabel)")
+    }
+
+    /// Transform-independent escape hatch. Lives in the always-on-screen chrome (not on
+    /// the off-screen image), so a camera stranded out-of-bounds can always be recovered.
+    private var recenterButton: some View {
+        Button {
+            zoomHaptic.impactOccurred()
+            withAnimation(.smooth(duration: 0.25)) {
+                resetTransform()
+            }
+        } label: {
+            Image(systemName: "arrow.counterclockwise")
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .liquidGlassCircle()
+        .contentShape(Rectangle())
+        .accessibilityLabel("Recenter camera")
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+    }
+
+    /// Resets pan/zoom to identity and persists so activeTransforms / PiP / watch update.
+    private func resetTransform() {
+        transform = .identity
+        lastTransform = .identity
+        persistState()
     }
 
     // MARK: - Gestures
@@ -398,11 +432,37 @@ struct StreamTileView: View {
                     transform = newTransform
                     lastTransform = newTransform
                 }
-                persistState()
+                // Don't persist a clamp-able transform against an unknown content size;
+                // heal-on-contentSize will settle it. Identity always persists (recovery).
+                if newTransform == .identity || (contentSize.width > 0 && contentSize.height > 0) {
+                    persistState()
+                }
             }
     }
 
+    /// Once the video lays out and a real content size is known, run the rehydrated
+    /// transform through `limitTransform`. The persisted transform is loaded in `init`
+    /// with only a `zoom <= 1` guard — pan is never clamped there because `contentSize`
+    /// is `.zero` at init. This is the cure for a previously-stranded camera: the moment
+    /// its video lays out, any out-of-bounds pan/zoom is clamped back on-screen and the
+    /// healed value is persisted and propagated (activeTransforms / PiP / watch).
+    private func healTransformIfNeeded(for size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+
+        let healed = limitTransform(transform)
+        guard healed != transform else { return }
+
+        transform = healed
+        lastTransform = healed
+        persistState()
+    }
+
     private func onEndGesture() {
+        // limitTransform clamps against contentSize; with a zero content size its pan
+        // clamp degenerates and the zoom cap divides into a zero-size center. Skip the
+        // settle/persist entirely — the heal-on-contentSize step handles this case.
+        guard contentSize.width > 0, contentSize.height > 0 else { return }
+
         let capped = limitTransform(transform)
         if capped == transform {
             lastTransform = transform
@@ -426,8 +486,8 @@ struct StreamTileView: View {
         var capped = t
 
         let currentScale = max(scaleX, scaleY)
-        if currentScale > 20.0 {
-            let factor = 20.0 / currentScale
+        if currentScale > StreamViewState.maxZoom {
+            let factor = StreamViewState.maxZoom / currentScale
             let center = CGPoint(x: contentSize.width / 2, y: contentSize.height / 2)
             let capT = CGAffineTransform(translationX: center.x, y: center.y)
                 .scaledBy(x: factor, y: factor)

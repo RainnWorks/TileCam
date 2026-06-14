@@ -8,9 +8,25 @@ struct Stream: Identifiable, Hashable, Codable {
 // MARK: - Per-stream view state (zoom, pan)
 
 struct StreamViewState: Codable, Equatable {
+    /// Hard ceiling on persisted zoom. Mirrors `StreamTileView.limitTransform`'s cap so a
+    /// corrupt blob can never apply an insane zoom even before content size is known.
+    static let maxZoom: Double = 20.0
+
     var zoom: Double = 1.0
     var panX: Double = 0.0
     var panY: Double = 0.0
+
+    /// Returns a copy with non-finite values rejected (treated as identity) and zoom
+    /// clamped into `[1, maxZoom]`. Pan is bounded later by `limitTransform` once the
+    /// content size is known.
+    func sanitized() -> StreamViewState {
+        guard zoom.isFinite, panX.isFinite, panY.isFinite else {
+            return StreamViewState()
+        }
+        var s = self
+        s.zoom = min(max(zoom, 1.0), Self.maxZoom)
+        return s
+    }
 }
 
 // MARK: - Persisted layout store
@@ -39,7 +55,7 @@ final class LayoutStore {
     }
 
     static func loadViewState(for streamName: String) -> StreamViewState {
-        loadAllViewStates()[streamName] ?? StreamViewState()
+        (loadAllViewStates()[streamName] ?? StreamViewState()).sanitized()
     }
 
     private static func loadAllViewStates() -> [String: StreamViewState] {
