@@ -13,6 +13,9 @@ final class WatchPaywallTests: TileCamUITestCase {
     /// and can't link the app target, so the id is duplicated here.
     private static let watchUnlockProductID = "works.rainn.tilecam.watch.unlock"
 
+    // The watch unlock IAP gates the Apple Watch companion, which has no meaning on
+    // Mac (no paired watch), and SKTestSession.buyProduct errors on Catalyst. iOS-only.
+    #if !targetEnvironment(macCatalyst)
     func testWatchUnlockPaywallGate() throws {
         // Fresh StoreKit test session from the same config the test plan uses.
         let session = try SKTestSession(configurationFileNamed: "TileCam")
@@ -60,4 +63,5 @@ final class WatchPaywallTests: TileCamUITestCase {
             "LOCKED 'Unlock Apple Watch' CTA still present after purchase"
         )
     }
+    #endif
 }

@@ -77,7 +77,9 @@ targets:
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: Automatic
         TEST_TARGET_NAME: TileCam
-        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        SUPPORTS_MACCATALYST: true
+        TARGETED_DEVICE_FAMILY: "1,2,6"
     dependencies:
       - target: TileCam
 
