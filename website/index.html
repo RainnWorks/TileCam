@@ -115,13 +115,15 @@
       <div class="crown btn"></div>
     </div>
   </div>
+
+  <p class="flow-caption reveal">Your iPhone does the heavy lifting — it pulls the feeds and streams them to your wrist over Bluetooth, so the Watch stays light on battery. The cameras you're watching show up automatically; tap any one for a live, zoomable look, or set a default to see the instant you raise your wrist. Drop your wrist and it backs off on its own.</p>
 </section>
 
 <!-- How it works: any camera -> go2rtc -> TileCam tiles -->
 <section id="how" class="wrap">
   <div class="section-head reveal">
     <div class="kicker">How it works</div>
-    <h2>Any camera, in. Tiles, out.</h2>
+    <h2>Any camera in.<br>Tiles out.</h2>
     <p>Point your own <a href="https://github.com/AlexxIT/go2rtc">go2rtc</a> server at whatever cameras you've got — TileCam tiles them on every Apple device.</p>
   </div>
 
@@ -150,10 +152,10 @@
 
       <!-- camera chips: real product photos protruding from each pill -->
       <g class="flow-label">
-        <g class="chip" transform="translate(8,26)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/tapo.png" x="2" y="-16" width="74" height="68" preserveAspectRatio="xMidYMid meet"/><text x="82" y="31">Tapo</text></g>
-        <g class="chip" transform="translate(8,116)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/reolink.png" x="2" y="-16" width="74" height="68" preserveAspectRatio="xMidYMid meet"/><text x="82" y="31">Reolink</text></g>
-        <g class="chip" transform="translate(8,206)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/unifi.png" x="2" y="-16" width="74" height="68" preserveAspectRatio="xMidYMid meet"/><text x="82" y="31">UniFi</text></g>
-        <g class="chip" transform="translate(8,296)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/onvif.png" x="2" y="-16" width="74" height="68" preserveAspectRatio="xMidYMid meet"/><text x="82" y="25">Any ONVIF<tspan x="82" dy="13">/ RTSP</tspan></text></g>
+        <g class="chip" transform="translate(8,26)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/tapo.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="31">Tapo</text></g>
+        <g class="chip" transform="translate(8,116)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/reolink.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="31">Reolink</text></g>
+        <g class="chip" transform="translate(8,206)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/unifi.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="31">UniFi</text></g>
+        <g class="chip" transform="translate(8,296)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/onvif.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="25">Any ONVIF<tspan x="94" dy="13">/ RTSP</tspan></text></g>
       </g>
 
       <!-- go2rtc: a small, quiet waypoint, not the point -->
@@ -213,7 +215,7 @@
   (function () {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const root = document.documentElement;
-    const glowables = document.querySelectorAll('.card, .highlight, .demo, .watch-stage');
+    const glowables = document.querySelectorAll('.card, .highlight, .demo');
     let raf = null, mx = 0, my = 0;
     window.addEventListener('pointermove', (e) => {
       mx = e.clientX; my = e.clientY;

@@ -728,8 +728,45 @@ extension PhoneSessionManager: WCSessionDelegate {
         log.info("WCSession activated: \(String(describing: activationState))")
         Task { @MainActor in
             self.isWatchReachable = session.isReachable
+            #if DEBUG
+            // Now that the session is actually activated, push the forced unlock via
+            // applicationContext (reliable, no reachability needed) so the Watch
+            // leaves the locked screen on its next launch.
+            if UserDefaults.standard.bool(forKey: "uiTestForceWatchUnlock") {
+                self.setWatchEntitlement(true)
+            }
+            self.debugPushWatchCameraIfRequested()
+            #endif
         }
     }
+
+    #if DEBUG
+    /// Test-only: when launched with `-uiTestPushWatchCamera <stream>`, push that
+    /// camera to the Watch once it's reachable so a capture lands straight on the
+    /// live snapshot view. Retries briefly while the Watch finishes connecting.
+    private var didDebugPushWatchCamera = false
+    func debugPushWatchCameraIfRequested() {
+        guard !didDebugPushWatchCamera,
+              let cam = UserDefaults.standard.string(forKey: "uiTestPushWatchCamera"),
+              !cam.isEmpty else { return }
+        guard let session, session.isReachable else { return }
+        didDebugPushWatchCamera = true
+        // Re-assert the forced unlock now that the Watch is actually reachable —
+        // the launch-time sync can land before the Watch connects, leaving a
+        // stale "locked" context that blocks the camera push.
+        if UserDefaults.standard.bool(forKey: "uiTestForceWatchUnlock") {
+            setWatchEntitlement(true)
+        }
+        Task { @MainActor in
+            // Hold on the list first so a screen recording captures list -> tap -> camera.
+            try? await Task.sleep(for: .seconds(4))
+            for _ in 0..<6 {
+                self.sendCameraToWatch(streamName: cam, zoom: 1.0, centerX: 0.5, centerY: 0.5)
+                try? await Task.sleep(for: .seconds(1.5))
+            }
+        }
+    }
+    #endif
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
 
@@ -741,6 +778,9 @@ extension PhoneSessionManager: WCSessionDelegate {
         log.info("Watch reachability: \(session.isReachable)")
         Task { @MainActor in
             self.isWatchReachable = session.isReachable
+            #if DEBUG
+            self.debugPushWatchCameraIfRequested()
+            #endif
             if !session.isReachable {
                 // Don't clear recovery info — we may need to re-subscribe on BT restore
                 self.unsubscribeFromStream(clearRecovery: false)

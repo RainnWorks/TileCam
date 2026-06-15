@@ -48,6 +48,20 @@ final class StoreManager: ObservableObject {
     /// revocation that happened while the app was closed is caught.
     func start() {
         guard updatesListener == nil else { return }
+        #if DEBUG
+        // Test-only: force the Watch unlock so marketing / UI captures can show the
+        // live Watch experience without a StoreKit purchase. Gated to DEBUG and a
+        // launch arg (`-uiTestForceWatchUnlock YES`), matching the other -uiTest
+        // hooks; no effect in normal use. Skips the entitlement refresh so it
+        // isn't immediately reset to locked.
+        if UserDefaults.standard.bool(forKey: "uiTestForceWatchUnlock") {
+            isWatchUnlocked = true
+            UserDefaults.standard.set(true, forKey: Self.unlockedKey)
+            PhoneSessionManager.shared.setWatchEntitlement(true)
+            updatesListener = Task {}   // mark started; bypass the real refresh
+            return
+        }
+        #endif
         Task {
             // Establish authoritative state from currentEntitlements FIRST, then
             // install the lifetime updates listener — otherwise the two race and
@@ -155,6 +169,11 @@ final class StoreManager: ObservableObject {
     /// Single chokepoint for entitlement state changes: persists the flag and
     /// pushes it to the Watch (which tears down any in-flight stream on lock).
     private func setUnlocked(_ unlocked: Bool) async {
+        #if DEBUG
+        // Test-only: with the force-unlock flag set, never let the (empty) StoreKit
+        // entitlement refresh lock us back down — keeps the Watch unlocked for captures.
+        if UserDefaults.standard.bool(forKey: "uiTestForceWatchUnlock") && !unlocked { return }
+        #endif
         // Idempotent: only act on an actual state change. Otherwise every benign
         // refresh (launch, a locked user tapping Restore, foreground refresh)
         // would re-run setWatchEntitlement(false) and tear down a stream.

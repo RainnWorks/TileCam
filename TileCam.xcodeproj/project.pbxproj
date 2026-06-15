@@ -17,6 +17,7 @@
 		30CC8FF95F8EF22BB5C03C0A /* IntensityHeatmapAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E038AE26150C1591BE8CB02C /* IntensityHeatmapAnalyzer.swift */; };
 		343C2E91D25C4B555E6AF04D /* WatchPaywallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F23D200BC6E943AFEEDFE7 /* WatchPaywallTests.swift */; };
 		39D702F16101F2D86AF9E5E9 /* WristBehaviorPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEE3C654765AEA86034AACC /* WristBehaviorPicker.swift */; };
+		3D7EAA24FBA2F4C8A826FF66 /* MarketingCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66F3888A3843CDAC8AC37AB /* MarketingCaptureTests.swift */; };
 		3EAF0AC2CCEF004F5C81B6E6 /* PhoneSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3563C36D319350555E97D8C /* PhoneSessionManager.swift */; };
 		4199C2DA076A70008435AE7E /* TileCamWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 6F4022B24DDBA44BB6797264 /* TileCamWatch.app */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4E2C4865B271C3577E590811 /* EulerianMagnifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5CBE2E3AABF8089C9CB27B /* EulerianMagnifier.swift */; };
@@ -130,6 +131,7 @@
 		C2DB276A24AC98EF387EACC5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D3563C36D319350555E97D8C /* PhoneSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSessionManager.swift; sourceTree = "<group>"; };
 		D6358E02DEFB2C1BD5298AC1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D66F3888A3843CDAC8AC37AB /* MarketingCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingCaptureTests.swift; sourceTree = "<group>"; };
 		E038AE26150C1591BE8CB02C /* IntensityHeatmapAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntensityHeatmapAnalyzer.swift; sourceTree = "<group>"; };
 		E7B7743AD623A88289AF7C1A /* WatchPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchPaywallView.swift; sourceTree = "<group>"; };
 		F63C3A7399519AF17932346C /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
@@ -197,6 +199,7 @@
 			isa = PBXGroup;
 			children = (
 				AE86BEB2D63674D095E36873 /* ConnectionFlowTests.swift */,
+				D66F3888A3843CDAC8AC37AB /* MarketingCaptureTests.swift */,
 				F63C3A7399519AF17932346C /* SmokeTests.swift */,
 				829113ABCDEB644A99805A15 /* TileCamUITestCase.swift */,
 				36F23D200BC6E943AFEEDFE7 /* WatchPaywallTests.swift */,
@@ -435,6 +438,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA7FFB6FE6E77F341D4692C4 /* ConnectionFlowTests.swift in Sources */,
+				3D7EAA24FBA2F4C8A826FF66 /* MarketingCaptureTests.swift in Sources */,
 				9CEF3852620FA562AA8802E8 /* SmokeTests.swift in Sources */,
 				6FE216CD157D6F011FA52FD4 /* TileCamUITestCase.swift in Sources */,
 				343C2E91D25C4B555E6AF04D /* WatchPaywallTests.swift in Sources */,

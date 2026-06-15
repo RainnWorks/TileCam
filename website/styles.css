@@ -248,26 +248,25 @@ section { padding: var(--s-120) 0; }
   transition: background 0.1s linear;
 }
 
-/* ---------- Interactive glow + lift on cards / panels ---------- */
-.card, .highlight, .demo, .watch-stage {
+/* ---------- Interactive glow + lift on cards / panels ----------
+   The glow itself is the effect — no hard border snaps in on hover. */
+.card, .highlight, .demo {
   position: relative;
-  transition: transform 0.35s var(--spring), border-color 0.3s var(--smooth),
-              box-shadow 0.4s var(--smooth);
+  transition: transform 0.4s var(--spring), box-shadow 0.45s var(--smooth);
 }
 .card { overflow: hidden; }
-.card::before, .highlight::before, .demo::before, .watch-stage::before {
+.card::before, .highlight::before, .demo::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   background: radial-gradient(260px circle at var(--gx, 50%) var(--gy, 50%),
-              rgba(255,255,255,0.10), transparent 60%);
-  opacity: 0; transition: opacity 0.35s var(--smooth); z-index: 0;
+              rgba(255,255,255,0.11), transparent 60%);
+  opacity: 0; transition: opacity 0.45s var(--smooth); z-index: 0;
 }
-.card > *, .highlight > *, .demo > *, .watch-stage > * { position: relative; z-index: 1; }
-.card:hover, .highlight:hover, .demo:hover, .watch-stage:hover {
-  transform: translateY(-4px); border-color: var(--w-35);
-  box-shadow: 0 22px 60px -28px rgba(0,0,0,0.85);
+.card > *, .highlight > *, .demo > * { position: relative; z-index: 1; }
+.card:hover, .highlight:hover, .demo:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 64px -32px rgba(0,0,0,0.85);
 }
-.card:hover::before, .highlight:hover::before,
-.demo:hover::before, .watch-stage:hover::before { opacity: 1; }
+.card:hover::before, .highlight:hover::before, .demo:hover::before { opacity: 1; }
 
 /* ---------- Hero demo: real camera feeds ---------- */
 .demo-tile { background: #0b0b0d; }
@@ -284,8 +283,13 @@ section { padding: var(--s-120) 0; }
 .tilecam-hero { filter: drop-shadow(0 0 34px rgba(255,255,255,0.09)); }
 
 /* ---------- Apple Watch frame ---------- */
-.watch-stage { display: flex; justify-content: center; align-items: center; padding: clamp(36px, 7vw, 72px); margin-top: var(--s-40); }
-.watch { position: relative; width: clamp(186px, 27vw, 246px); aspect-ratio: 0.84; }
+/* Plain centering stage — no card chrome, so nothing but the watch reacts. */
+.watch-stage { display: flex; justify-content: center; align-items: center; padding: clamp(28px, 5vw, 56px); margin-top: var(--s-24); }
+.watch {
+  position: relative; width: clamp(186px, 27vw, 246px); aspect-ratio: 0.84;
+  transition: transform 0.45s var(--spring), filter 0.45s var(--smooth);
+}
+.watch:hover { transform: translateY(-6px); filter: drop-shadow(0 26px 44px rgba(0,0,0,0.55)); }
 .watch .band {
   position: absolute; left: 50%; transform: translateX(-50%); width: 62%; height: 38%;
   background: linear-gradient(#3a3a3e, #1c1c1f); z-index: 0;
