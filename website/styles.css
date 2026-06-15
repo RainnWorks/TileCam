@@ -190,6 +190,14 @@ section { padding: var(--s-120) 0; }
 .platforms .devs { display: flex; flex-wrap: wrap; gap: var(--s-16); justify-content: center; }
 .platforms strong { color: var(--w-60); font-weight: 500; }
 
+/* ---------- Flow diagram (cameras -> go2rtc -> tiles) ---------- */
+.flow { max-width: 900px; margin: var(--s-40) auto 0; }
+.flow svg { width: 100%; height: auto; display: block; overflow: visible; }
+.flow-label text { fill: var(--w-60); font-family: var(--font); font-size: 16px; font-weight: 600; }
+.flow-node { fill: var(--w-1); font-family: var(--font); font-size: 18px; font-weight: 700; }
+.flow-sub { fill: var(--w-35); font-family: var(--font); font-size: 12px; font-weight: 500; }
+.flow-caption { text-align: center; color: var(--w-45); max-width: 54ch; margin: var(--s-32) auto 0; font-size: 16px; line-height: 1.55; }
+
 /* ---------- Privacy highlight ---------- */
 .highlight { text-align: center; padding: clamp(40px, 7vw, 72px); }
 .highlight h2 { font-size: clamp(25px, 3.4vw, 35px); letter-spacing: -0.02em; line-height: 1.12; max-width: 20ch; margin: 0 auto var(--s-16); }
