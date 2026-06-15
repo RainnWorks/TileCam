@@ -59,7 +59,8 @@ img { max-width: 100%; }
 }
 
 /* ---------- Layout ---------- */
-.wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 var(--s-24); }
+/* horizontal padding only — must not clobber the vertical padding on <section> */
+.wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding-left: var(--s-24); padding-right: var(--s-24); }
 section { padding: var(--s-120) 0; }
 @media (max-width: 720px) { section { padding: var(--s-80) 0; } }
 
