@@ -240,6 +240,75 @@ section { padding: var(--s-120) 0; }
 .footer-links a:hover { color: var(--w-1); }
 .footer .copy { color: var(--w-35); font-size: 14px; }
 
+/* ---------- Cursor spotlight: a soft glow follows the mouse across the page ---------- */
+.cursor-glow {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(480px circle at var(--mx, 50%) var(--my, -300px),
+              rgba(255,255,255,0.06), transparent 64%);
+  transition: background 0.1s linear;
+}
+
+/* ---------- Interactive glow + lift on cards / panels ---------- */
+.card, .highlight, .demo, .watch-stage {
+  position: relative;
+  transition: transform 0.35s var(--spring), border-color 0.3s var(--smooth),
+              box-shadow 0.4s var(--smooth);
+}
+.card { overflow: hidden; }
+.card::before, .highlight::before, .demo::before, .watch-stage::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(260px circle at var(--gx, 50%) var(--gy, 50%),
+              rgba(255,255,255,0.10), transparent 60%);
+  opacity: 0; transition: opacity 0.35s var(--smooth); z-index: 0;
+}
+.card > *, .highlight > *, .demo > *, .watch-stage > * { position: relative; z-index: 1; }
+.card:hover, .highlight:hover, .demo:hover, .watch-stage:hover {
+  transform: translateY(-4px); border-color: var(--w-35);
+  box-shadow: 0 22px 60px -28px rgba(0,0,0,0.85);
+}
+.card:hover::before, .highlight:hover::before,
+.demo:hover::before, .watch-stage:hover::before { opacity: 1; }
+
+/* ---------- Hero demo: real camera feeds ---------- */
+.demo-tile { background: #0b0b0d; }
+.demo-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------- Flow diagram: protruding cameras, TileCam hero ---------- */
+.flow svg { overflow: visible; }
+.flow .chip { transition: filter 0.3s var(--smooth); }
+.flow .cam-img { filter: drop-shadow(0 7px 12px rgba(0,0,0,0.6)); transition: filter 0.3s var(--smooth); }
+.flow .chip:hover .cam-img { filter: drop-shadow(0 0 14px rgba(255,255,255,0.35)) drop-shadow(0 7px 12px rgba(0,0,0,0.6)); }
+.flow .tc-thumb { clip-path: inset(0 round 8px); }
+.flow-node-lg { fill: var(--w-1); font-family: var(--font); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.flow-node-sm { fill: var(--w-60); font-family: var(--font); font-size: 14px; font-weight: 600; }
+.tilecam-hero { filter: drop-shadow(0 0 34px rgba(255,255,255,0.09)); }
+
+/* ---------- Apple Watch frame ---------- */
+.watch-stage { display: flex; justify-content: center; align-items: center; padding: clamp(36px, 7vw, 72px); margin-top: var(--s-40); }
+.watch { position: relative; width: clamp(186px, 27vw, 246px); aspect-ratio: 0.84; }
+.watch .band {
+  position: absolute; left: 50%; transform: translateX(-50%); width: 62%; height: 38%;
+  background: linear-gradient(#3a3a3e, #1c1c1f); z-index: 0;
+}
+.watch .band.top { top: -22%; border-radius: 16px 16px 6px 6px; }
+.watch .band.bottom { bottom: -22%; border-radius: 6px 6px 16px 16px; }
+.watch .case {
+  position: absolute; inset: 0; z-index: 1; border-radius: 32% / 26%;
+  background: linear-gradient(150deg, #46464b, #1a1a1d 60%);
+  box-shadow: 0 26px 60px -24px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(255,255,255,0.08);
+  padding: 7%;
+}
+.watch .screen {
+  position: relative; width: 100%; height: 100%; border-radius: 26% / 22%;
+  overflow: hidden; background: #000; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.6);
+}
+.watch .screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.watch .crown {
+  position: absolute; right: -3%; top: 38%; width: 5%; height: 16%; z-index: 2;
+  border-radius: 3px; background: linear-gradient(#55555a, #2a2a2d);
+}
+.watch .crown.btn { top: 58%; height: 11%; }
+
 /* ---------- Scroll reveal ---------- */
 .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.5s var(--smooth), transform 0.5s var(--spring); }
 .reveal.in { opacity: 1; transform: none; }
