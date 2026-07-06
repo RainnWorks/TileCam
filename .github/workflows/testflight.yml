@@ -19,17 +19,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pin an Xcode that actually has the iOS device SDK installed. On the
-      # macos-15 image, Xcode_16.2 ships WITHOUT the iOS platform, so gym's
-      # `xcodebuild -destination generic/platform=iOS` archive fails with
-      # "iOS 18.2 is not installed". `-downloadPlatform iOS` is flaky on the
-      # runner (exit 70), so instead we scan the installed Xcodes and select
-      # the newest one whose `-showsdks` lists an iphoneos SDK.
-      - name: Select Xcode with iOS SDK
+      # Pick the Xcode to build with. Two constraints:
+      #  1. The app uses iOS 26 "Liquid Glass" APIs (glassEffect, the `.circle`
+      #     shape shorthand) behind `#available(iOS 26, *)`, so it needs the
+      #     iOS 26 SDK (Xcode 26+) to COMPILE — older Xcodes fail with
+      #     "cannot infer contextual base in reference to member 'circle'".
+      #  2. On the macos-15 image some Xcodes ship WITHOUT the iOS device
+      #     platform, so `xcodebuild -destination generic/platform=iOS` (what
+      #     gym archives with) fails with "iOS … is not installed".
+      # So: scan every installed Xcode, newest first, and select the newest one
+      # whose `-showsdks` actually lists an iphoneos SDK.
+      - name: Select newest Xcode with iOS SDK
         run: |
           set -euo pipefail
+          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app 2>/dev/null || true
           selected=""
-          for xc in $(ls -d /Applications/Xcode_16*.app /Applications/Xcode.app 2>/dev/null | sort -Vr); do
+          for xc in $(ls -d /Applications/Xcode*.app 2>/dev/null | sort -Vr); do
             dev="$xc/Contents/Developer"
             if DEVELOPER_DIR="$dev" xcodebuild -showsdks 2>/dev/null | grep -qi "iphoneos"; then
               selected="$xc"; break
