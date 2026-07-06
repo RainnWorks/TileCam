@@ -5,6 +5,14 @@ default_platform(:ios)
 
 APP_IDS = ["works.rainn.tilecam", "works.rainn.tilecam.watchkitapp"].freeze
 
+# Xcode target name → its bundle identifier. Both targets are archived together
+# (the watch app is embedded in the iOS app) and each needs its own App Store
+# provisioning profile at archive time.
+TARGET_APP_IDS = {
+  "TileCam"      => "works.rainn.tilecam",
+  "TileCamWatch" => "works.rainn.tilecam.watchkitapp"
+}.freeze
+
 # App Store Connect API key.
 #  - CI (GitHub Actions): set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_CONTENT
 #    (the .p8, base64-encoded → ASC_KEY_CONTENT_BASE64=true) as secrets.
@@ -54,6 +62,23 @@ platform :ios do
     gen
     setup_ci if is_ci
     signing if is_ci # CI uses match; locally we rely on Xcode automatic signing
+    # In CI the runner has no signed-in Apple ID, so Xcode's automatic signing
+    # can't mint profiles. match installed the App Store distribution cert +
+    # profiles; pin each archived target to manual signing with them. (Local
+    # dev keeps automatic signing from project.yml — this only runs in CI and
+    # edits the generated .xcodeproj, never project.yml.)
+    if is_ci
+      TARGET_APP_IDS.each do |target, app_id|
+        update_code_signing_settings(
+          path: "TileCam.xcodeproj",
+          use_automatic_signing: false,
+          team_id: "53W966FBFP",
+          code_sign_identity: "Apple Distribution",
+          targets: [target],
+          profile_name: "match AppStore #{app_id}"
+        )
+      end
+    end
     build_app(
       project: "TileCam.xcodeproj",
       scheme: "TileCam",
