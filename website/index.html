@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TileCam — every camera, tiled, on every Apple device</title>
+<meta name="description" content="Pull all your go2rtc / WebRTC cameras into one grid. Zoom into any of them. Glance on your iPhone, iPad, Mac, or Apple Watch. Free, except a one-time Watch unlock.">
+<meta name="theme-color" content="#000000">
+<meta property="og:title" content="TileCam">
+<meta property="og:description" content="Every camera, tiled. Zoom in. Glance on your wrist. Powered by your own go2rtc server.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="cursor-glow" aria-hidden="true"></div>
+
+<div class="nav-scrim"></div>
+<nav class="nav">
+  <a class="brand" href="index.html"><span class="dot"></span> TileCam</a>
+  <div class="nav-links">
+    <a href="#features" class="hide-sm">Features</a>
+    <a href="#watch" class="hide-sm">Watch</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="support.html">Support</a>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <h1 class="reveal">Every camera, tiled.<br>On every Apple device.</h1>
+  <p class="lede reveal">Pull all your feeds into one grid. Pinch to zoom into any of them. Glance at them on your iPhone, iPad, Mac — or your wrist. No more a browser tab per camera.</p>
+  <div class="hero-cta reveal">
+    <!-- TODO: replace # with the App Store URL once the app is live -->
+    <a class="btn" href="#">Download — free</a>
+    <a class="btn ghost" href="#how">How it works</a>
+  </div>
+
+  <!-- Self-playing demo: tap a camera and the grid reflows to fill the frame, like the app -->
+  <div class="demo glass reveal" id="demo" role="img" aria-label="Demo of cameras tiling into an adaptive grid">
+    <div class="demo-frame">
+      <div class="demo-tile"><video src="assets/feeds/living_room.mp4" poster="assets/feeds/living_room.jpg" muted loop autoplay playsinline preload="metadata"></video></div>
+      <div class="demo-tile"><video src="assets/feeds/puppies.mp4" poster="assets/feeds/puppies.jpg" muted loop autoplay playsinline preload="metadata"></video></div>
+      <div class="demo-tile"><video src="assets/feeds/garden.mp4" poster="assets/feeds/garden.jpg" muted loop autoplay playsinline preload="metadata"></video></div>
+      <div class="demo-tile"><video src="assets/feeds/kennel.mp4" poster="assets/feeds/kennel.jpg" muted loop autoplay playsinline preload="metadata"></video></div>
+    </div>
+    <div class="demo-tokens" aria-hidden="true">
+      <span class="token">Living&nbsp;Room</span>
+      <span class="token">Puppies</span>
+      <span class="token">Garden</span>
+      <span class="token">Yard</span>
+    </div>
+  </div>
+</header>
+
+<!-- Why it exists -->
+<section class="wrap">
+  <div class="section-head reveal">
+    <div class="kicker">Why it exists</div>
+    <h2>One calm grid, not five browser tabs.</h2>
+    <p>I use an iPad as a nanny-cam and just wanted to see every camera at once — without juggling clunky manufacturer apps and a browser tab per feed. So TileCam is one grid: every camera live, tap to zoom, and it looks like an Apple app, not a security panel.</p>
+  </div>
+</section>
+
+<!-- In-app experience -->
+<section id="features" class="wrap">
+  <div class="grid">
+    <div class="card glass reveal">
+      <div class="ico">▦</div>
+      <h3>Tile them all</h3>
+      <p>Every camera in one adaptive grid that reflows to fit — one full-screen, four in a 2×2, however many you point it at.</p>
+    </div>
+    <div class="card glass reveal">
+      <div class="ico">⊕</div>
+      <h3>Zoom &amp; pan</h3>
+      <p>Pinch into any feed to read a label, check a face, or watch the cot — and it remembers where you left each one.</p>
+    </div>
+    <div class="card glass reveal">
+      <div class="ico">〜</div>
+      <h3>Motion visualization</h3>
+      <p>Spot subtle movement at a glance — a breathing magnifier, directional motion flow, and an intensity heatmap, right on the feed.</p>
+    </div>
+    <div class="card glass reveal">
+      <div class="ico">◳</div>
+      <h3>Picture-in-Picture</h3>
+      <p>Float a camera in the corner and keep half an eye on it while you do everything else.</p>
+    </div>
+    <div class="card glass reveal">
+      <div class="ico">🎧</div>
+      <h3>Live audio</h3>
+      <p>Two-way audio on cameras that support it, with per-stream mute and clean level metering.</p>
+    </div>
+    <div class="card glass reveal">
+      <div class="ico">↻</div>
+      <h3>Everywhere you are</h3>
+      <p>iPhone, iPad, and Mac — the same calm grid, in sync, wherever you happen to be standing.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Apple Watch — its own thing -->
+<section id="watch" class="wrap">
+  <div class="highlight glass reveal">
+    <div class="kicker">On your wrist</div>
+    <h2>Check the nursery from the kitchen.</h2>
+    <p>Raise your wrist for a live look at any camera — the cot, the front door, the driveway — without reaching for a phone. The Apple&nbsp;Watch app is the only paid part of TileCam: a single one-time unlock, no subscription.</p>
+  </div>
+  <div class="watch-stage reveal">
+    <div class="watch" role="img" aria-label="A live camera feed on the TileCam Apple Watch app">
+      <div class="band top"></div>
+      <div class="band bottom"></div>
+      <div class="case">
+        <div class="screen"><img src="assets/watch/screen.png" alt="TileCam on Apple Watch"></div>
+      </div>
+      <div class="crown"></div>
+      <div class="crown btn"></div>
+    </div>
+  </div>
+
+  <p class="flow-caption reveal">Your iPhone does the heavy lifting — it pulls the feeds and streams them to your wrist over Bluetooth, so the Watch stays light on battery. The cameras you're watching show up automatically; tap any one for a live, zoomable look, or set a default to see the instant you raise your wrist. Drop your wrist and it backs off on its own.</p>
+</section>
+
+<!-- How it works: any camera -> go2rtc -> TileCam tiles -->
+<section id="how" class="wrap">
+  <div class="section-head reveal">
+    <div class="kicker">How it works</div>
+    <h2>Any camera in.<br>Tiles out.</h2>
+    <p>Point your own <a href="https://github.com/AlexxIT/go2rtc">go2rtc</a> server at whatever cameras you've got — TileCam tiles them on every Apple device.</p>
+  </div>
+
+  <div class="flow reveal" role="img" aria-label="Cameras from any brand feed through a small go2rtc server and land together in TileCam on your devices">
+    <svg viewBox="0 0 960 400" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <!-- connection paths: cameras -> go2rtc (p), go2rtc -> TileCam (q) -->
+      <g fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5">
+        <path id="p1" d="M196,52  C262,52  286,196 316,206"/>
+        <path id="p2" d="M196,142 C272,142 292,204 316,209"/>
+        <path id="p3" d="M196,232 C272,232 292,216 316,212"/>
+        <path id="p4" d="M196,322 C262,322 286,224 316,215"/>
+        <path id="q1" d="M414,205 C474,205 496,150 528,150"/>
+        <path id="q2" d="M414,210 C486,210 506,210 528,210"/>
+        <path id="q3" d="M414,215 C474,215 496,272 528,272"/>
+      </g>
+      <!-- flowing dots: feeds in (green), tiles out (white) -->
+      <g>
+        <circle r="3.3" fill="#34c759"><animateMotion dur="2.4s" repeatCount="indefinite" begin="0s"><mpath href="#p1"/></animateMotion></circle>
+        <circle r="3.3" fill="#34c759"><animateMotion dur="2.4s" repeatCount="indefinite" begin="0.5s"><mpath href="#p2"/></animateMotion></circle>
+        <circle r="3.3" fill="#34c759"><animateMotion dur="2.4s" repeatCount="indefinite" begin="1.0s"><mpath href="#p3"/></animateMotion></circle>
+        <circle r="3.3" fill="#34c759"><animateMotion dur="2.4s" repeatCount="indefinite" begin="1.5s"><mpath href="#p4"/></animateMotion></circle>
+        <circle r="3.1" fill="rgba(255,255,255,0.9)"><animateMotion dur="1.9s" repeatCount="indefinite" begin="0.3s"><mpath href="#q1"/></animateMotion></circle>
+        <circle r="3.1" fill="rgba(255,255,255,0.9)"><animateMotion dur="1.9s" repeatCount="indefinite" begin="0.9s"><mpath href="#q2"/></animateMotion></circle>
+        <circle r="3.1" fill="rgba(255,255,255,0.9)"><animateMotion dur="1.9s" repeatCount="indefinite" begin="1.5s"><mpath href="#q3"/></animateMotion></circle>
+      </g>
+
+      <!-- camera chips: real product photos protruding from each pill -->
+      <g class="flow-label">
+        <g class="chip" transform="translate(8,26)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/tapo.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="31">Tapo</text></g>
+        <g class="chip" transform="translate(8,116)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/reolink.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="31">Reolink</text></g>
+        <g class="chip" transform="translate(8,206)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/unifi.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="31">UniFi</text></g>
+        <g class="chip" transform="translate(8,296)"><rect width="188" height="52" rx="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/><image class="cam-img" href="assets/cameras/onvif.png" x="-4" y="-16" width="88" height="84" preserveAspectRatio="xMidYMid meet"/><text x="94" y="25">Any ONVIF<tspan x="94" dy="13">/ RTSP</tspan></text></g>
+      </g>
+
+      <!-- go2rtc: a small, quiet waypoint, not the point -->
+      <g transform="translate(318,192)">
+        <rect width="96" height="36" rx="18" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.18)"/>
+        <text class="flow-node-sm" x="48" y="23" text-anchor="middle">go2rtc</text>
+        <text class="flow-sub" x="48" y="52" text-anchor="middle">your server</text>
+      </g>
+
+      <!-- TileCam: the hero — every feed, tiled, live -->
+      <g class="tilecam-hero" transform="translate(528,36)">
+        <rect width="424" height="332" rx="24" fill="#0a0a0c" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
+        <image class="tc-thumb" href="assets/feeds/living_room.jpg" x="18"  y="18"  width="187" height="88" preserveAspectRatio="xMidYMid slice"/><circle cx="28"  cy="98"  r="3.2" fill="#34c759"/>
+        <image class="tc-thumb" href="assets/feeds/garden.jpg"      x="215" y="18"  width="187" height="88" preserveAspectRatio="xMidYMid slice"/><circle cx="225" cy="98"  r="3.2" fill="#34c759"/>
+        <image class="tc-thumb" href="assets/feeds/puppies.jpg"     x="18"  y="116" width="187" height="88" preserveAspectRatio="xMidYMid slice"/><circle cx="28"  cy="196" r="3.2" fill="#34c759"/>
+        <image class="tc-thumb" href="assets/feeds/kennel.jpg"      x="215" y="116" width="187" height="88" preserveAspectRatio="xMidYMid slice"/><circle cx="225" cy="196" r="3.2" fill="#34c759"/>
+        <image class="tc-thumb" href="assets/feeds/barn.jpg"        x="18"  y="214" width="187" height="88" preserveAspectRatio="xMidYMid slice"/><circle cx="28"  cy="294" r="3.2" fill="#34c759"/>
+        <image class="tc-thumb" href="assets/feeds/waterhole.jpg"   x="215" y="214" width="187" height="88" preserveAspectRatio="xMidYMid slice"/><circle cx="225" cy="294" r="3.2" fill="#34c759"/>
+      </g>
+      <text class="flow-node-lg" x="740" y="392" text-anchor="middle">TileCam</text>
+    </svg>
+  </div>
+
+  <p class="flow-caption reveal">Any camera works — from a €200 UniFi to an €18 Tapo with its internet access blocked. Your go2rtc server gathers them on your own network, and TileCam turns them into one calm grid on every Apple device. Your video never leaves your network — nothing is routed through us.</p>
+</section>
+
+<!-- Pricing -->
+<section class="wrap">
+  <div class="section-head reveal">
+    <div class="kicker">Pricing</div>
+    <h2>Free. The Watch unlock is one&nbsp;and&nbsp;done.</h2>
+    <p>The iPhone, iPad, and Mac apps are completely free. The Apple&nbsp;Watch companion is a single one-time purchase — buy it once, keep it forever, shareable with Family&nbsp;Sharing. No subscriptions, ever.</p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <a class="brand" href="index.html"><span class="dot"></span> TileCam</a>
+    <div class="footer-links">
+      <a href="privacy.html">Privacy</a>
+      <a href="support.html">Support</a>
+      <a href="terms.html">Terms</a>
+    </div>
+    <div class="copy">© 2026 RainnWorks</div>
+  </div>
+</footer>
+
+<script>
+  // Scroll reveal
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // Glow that follows the cursor — a soft page-wide spotlight, plus a local
+  // highlight inside whatever card/panel you're hovering.
+  (function () {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const root = document.documentElement;
+    const glowables = document.querySelectorAll('.card, .highlight, .demo');
+    let raf = null, mx = 0, my = 0;
+    window.addEventListener('pointermove', (e) => {
+      mx = e.clientX; my = e.clientY;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        root.style.setProperty('--mx', mx + 'px');
+        root.style.setProperty('--my', my + 'px');
+        raf = null;
+      });
+    }, { passive: true });
+    glowables.forEach((el) => {
+      el.addEventListener('pointermove', (e) => {
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--gx', (e.clientX - r.left) + 'px');
+        el.style.setProperty('--gy', (e.clientY - r.top) + 'px');
+      }, { passive: true });
+    });
+  })();
+
+  // Self-playing hero demo: "tap" a camera token and the grid adaptively reflows
+  // to fill the frame, exactly like the app (1 = full, 2 = split, 3-4 = grid).
+  (function () {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const frame  = document.querySelector('.demo-frame');
+    const tiles  = [...document.querySelectorAll('.demo-tile')];
+    const tokens = [...document.querySelectorAll('.token')];
+    const GAP = 8;
+    const colsFor = (n) => (n <= 1 ? 1 : 2);
+    let current = 0;
+
+    function layout(count) {
+      current = count;
+      const W = frame.clientWidth, H = frame.clientHeight;
+      const c = colsFor(count), rows = Math.max(1, Math.ceil(count / c));
+      const cw = (W - (c - 1) * GAP) / c;
+      const ch = (H - (rows - 1) * GAP) / rows;
+      tiles.forEach((t, i) => {
+        if (i < count) {
+          const col = i % c, row = Math.floor(i / c);
+          t.style.left = (col * (cw + GAP)) + 'px';
+          t.style.top = (row * (ch + GAP)) + 'px';
+          t.style.width = cw + 'px';
+          t.style.height = ch + 'px';
+          t.classList.add('shown');
+        } else {
+          t.classList.remove('shown');
+        }
+      });
+    }
+    window.addEventListener('resize', () => layout(current));
+
+    if (reduce) { tokens.forEach(t => t.classList.add('active')); layout(tiles.length); return; }
+
+    let count = 0;
+    function play() {
+      count++;
+      const tok = tokens[count - 1];
+      if (tok) { tok.classList.add('tap', 'active'); setTimeout(() => tok.classList.remove('tap'), 360); }
+      layout(count);
+      if (count >= tiles.length) {
+        setTimeout(() => {
+          count = 1;
+          tokens.forEach((t, i) => { if (i > 0) t.classList.remove('active'); });
+          layout(1);
+          setTimeout(play, 1200);
+        }, 2800);
+      } else {
+        setTimeout(play, 1050);
+      }
+    }
+    setTimeout(play, 650);
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+Every camera, tiled. On every Apple device.
+
+TileCam pulls all your cameras into one calm grid that looks and feels like an Apple app — not a security panel. Point your own go2rtc server at whatever cameras you already own and watch them all at once on iPhone, iPad, Mac, and Apple Watch.
+
+WORKS WITH THE CAMERAS YOU HAVE
+Tapo, Reolink, UniFi, Amcrest, Hikvision — or any ONVIF / RTSP camera. If go2rtc can see it, TileCam can tile it. Mix a €200 pro camera with an €18 budget one; it all lands in the same grid.
+
+YOUR VIDEO, YOUR NETWORK
+TileCam connects to your own go2rtc server over WebRTC. Your footage never leaves your network and nothing is routed through us. Block a cheap camera from the internet and still watch it beautifully.
+
+ONE GRID, NOT FIVE APPS
+• Tile them all — an adaptive grid that reflows to fit: one full-screen, four in a 2×2, however many you point it at.
+• Zoom & pan — pinch into any live feed to read a label, check a face, or watch the cot. It remembers where you left each one.
+• Motion visualization — spot subtle movement at a glance with a breathing magnifier, directional motion flow, and an intensity heatmap, right on the feed.
+• Picture-in-Picture — float a camera in the corner and keep half an eye on it while you do everything else.
+• Live audio — two-way audio on cameras that support it, with per-stream mute and clean level metering.
+• Everywhere you are — iPhone, iPad, and Mac, the same calm grid, in sync.
+
+ON YOUR WRIST
+Raise your Apple Watch for a live look at any camera — the cot, the front door, the driveway — without reaching for a phone. Your iPhone relays the feeds over Bluetooth to keep the Watch light on battery.
+
+FREE, WITH ONE OPTIONAL UNLOCK
+The iPhone, iPad, and Mac apps are completely free. The Apple Watch companion is a single one-time unlock — buy it once, keep it forever, shareable with Family Sharing. No subscriptions, ever.
+
+Requires your own go2rtc server (free, open-source). Dark mode only.

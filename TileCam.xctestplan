@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "A1B2C3D4-0001-0001-0001-000000000001",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "storeKitConfigurationFileReference" : {
+      "identifier" : "TileCam.storekit"
+    },
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:TileCam.xcodeproj",
+      "identifier" : "DED5BE0EC1A27DD0963B7B36",
+      "name" : "TileCam"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:TileCam.xcodeproj",
+        "identifier" : "EB7D63147EC9F7A495CD2459",
+        "name" : "TileCamUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

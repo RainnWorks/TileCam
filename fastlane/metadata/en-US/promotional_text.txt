@@ -1,0 +1,1 @@
+Every camera you own in one calm grid — iPhone, iPad, Mac, Apple Watch. Point your go2rtc server at any RTSP/ONVIF camera; your video stays on your network.

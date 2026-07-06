@@ -1,0 +1,104 @@
+name: TileCam
+options:
+  bundleIdPrefix: works.rainn
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+    watchOS: "10.0"
+  xcodeVersion: "16.0"
+
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC
+    exactVersion: "140.0.0"
+
+schemes:
+  TileCam:
+    build:
+      targets:
+        TileCam: all
+        TileCamUITests: [test]
+    run:
+      config: Debug
+      storeKitConfiguration: TileCam.storekit
+    test:
+      config: Debug
+      testPlans:
+        - path: TileCam.xctestplan
+          defaultPlan: true
+    archive:
+      config: Release
+  TileCamWatch:
+    build:
+      targets:
+        TileCamWatch: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+targets:
+  TileCam:
+    type: application
+    platform: iOS
+    sources:
+      - GlassView
+    settings:
+      base:
+        INFOPLIST_FILE: GlassView/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: works.rainn.tilecam
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SUPPORTS_MACCATALYST: true
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: false
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        # App Sandbox (+ network client, mic) is required for the Mac App Store.
+        # Scoped to the macOS SDK so the iOS build keeps its own (default) entitlements.
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": TileCam.macOS.entitlements
+        DEVELOPMENT_TEAM: 53W966FBFP
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: WebRTC
+      - target: TileCamWatch
+        embed: watch2
+        platformFilter: iOS
+
+  TileCamUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - TileCamUITests
+      - path: TileCam.storekit
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: works.rainn.tilecam.uitests
+        DEVELOPMENT_TEAM: 53W966FBFP
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Automatic
+        TEST_TARGET_NAME: TileCam
+        GENERATE_INFOPLIST_FILE: YES
+        SUPPORTS_MACCATALYST: true
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+    dependencies:
+      - target: TileCam
+
+  TileCamWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - TileCamWatch
+    settings:
+      base:
+        INFOPLIST_FILE: TileCamWatch/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: works.rainn.tilecam.watchkitapp
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        DEVELOPMENT_TEAM: 53W966FBFP
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "4"

@@ -1,0 +1,326 @@
+/* TileCam — site styles. Dark glassomorphism, ported from the app's design system.
+   Opacity-as-hierarchy (never gray), frosted glass, system SF, semantic color only. */
+
+:root {
+  --w-1:   rgba(255,255,255,1);
+  --w-60:  rgba(255,255,255,0.6);
+  --w-45:  rgba(255,255,255,0.45);
+  --w-35:  rgba(255,255,255,0.35);
+  --w-15:  rgba(255,255,255,0.15);
+  --w-08:  rgba(255,255,255,0.08);
+  --w-06:  rgba(255,255,255,0.06);
+
+  --green:  #34c759;
+  --orange: #ff9f0a;
+  --red:    #ff453a;
+
+  --s-4: 4px; --s-8: 8px; --s-12: 12px; --s-16: 16px;
+  --s-24: 24px; --s-32: 32px; --s-40: 40px; --s-56: 56px; --s-80: 80px; --s-120: 120px;
+
+  --r-12: 12px; --r-16: 16px; --r-24: 24px; --r-full: 999px;
+
+  --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --maxw: 1040px;
+  --readw: 660px;
+
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { overflow-x: hidden; }     /* no accidental horizontal scroll */
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: #000;
+  color: var(--w-1);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background-image: radial-gradient(1100px 560px at 50% -8%, rgba(255,255,255,0.055), transparent 62%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; }
+
+/* ---------- Glass ---------- */
+.glass {
+  background: var(--w-06);
+  border: 1px solid var(--w-15);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-radius: var(--r-24);
+}
+
+/* ---------- Layout ---------- */
+/* horizontal padding only — must not clobber the vertical padding on <section> */
+.wrap { width: 100%; max-width: var(--maxw); margin: 0 auto; padding-left: var(--s-24); padding-right: var(--s-24); }
+section { padding: var(--s-120) 0; }
+@media (max-width: 720px) { section { padding: var(--s-80) 0; } }
+
+/* ---------- Nav ---------- */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; max-width: var(--maxw); margin: 0 auto;
+  padding: var(--s-16) var(--s-24);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+.nav-scrim {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 49; height: 72px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55), transparent);
+  pointer-events: none;
+}
+.brand { display: flex; align-items: center; gap: var(--s-8); font-weight: 600; font-size: 17px; }
+.brand .dot {
+  width: 22px; height: 22px; border-radius: 7px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.92), rgba(255,255,255,0.42));
+  box-shadow: inset 0 0 0 1px var(--w-15);
+}
+.nav-links { display: flex; gap: var(--s-24); align-items: center; }
+.nav-links a { color: var(--w-60); font-size: 15px; transition: color 0.2s var(--smooth); }
+.nav-links a:hover { color: var(--w-1); }
+@media (max-width: 560px) { .nav-links { gap: var(--s-16); } .hide-sm { display: none; } }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-8);
+  padding: 13px 22px; border-radius: var(--r-12);
+  font-size: 15px; font-weight: 600; white-space: nowrap;
+  background: var(--w-15); border: 1px solid rgba(255,255,255,0.2);
+  color: var(--w-1); cursor: pointer;
+  transition: transform 0.25s var(--spring), background 0.2s var(--smooth);
+}
+.btn:hover { transform: scale(1.03); background: rgba(255,255,255,0.2); }
+.btn:active { transform: scale(0.98); }
+.btn.ghost { background: transparent; border-color: var(--w-15); color: var(--w-60); }
+.btn.ghost:hover { color: var(--w-1); border-color: var(--w-35); }
+
+/* ---------- Hero ---------- */
+.hero { text-align: center; padding-top: clamp(56px, 11vh, 120px); padding-bottom: 0; }
+.hero h1 {
+  font-size: clamp(38px, 6.6vw, 72px); font-weight: 700; letter-spacing: -0.03em;
+  line-height: 1.04; margin: 0 auto var(--s-24); max-width: 16ch;
+}
+.hero .lede {
+  font-size: clamp(17px, 2.2vw, 21px); color: var(--w-60); line-height: 1.5;
+  max-width: 40ch; margin: 0 auto var(--s-32); font-weight: 400;
+}
+.hero-cta { display: flex; gap: var(--s-12); justify-content: center; flex-wrap: wrap; }
+
+/* ---------- Animated demo (self-playing app interaction) ---------- */
+.demo {
+  margin: clamp(48px, 8vh, 88px) auto 0; max-width: 720px;
+  padding: var(--s-16); text-align: left;
+}
+/* The frame fills a fixed aspect ratio; tiles are absolutely positioned and
+   re-laid-out by JS to fill the space, like the app's adaptive grid. */
+.demo-frame { position: relative; width: 100%; aspect-ratio: 16 / 10; }
+.demo-tile {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  border-radius: var(--r-16); overflow: hidden; border: 1px solid var(--w-08);
+  opacity: 0; transform: scale(0.86);
+  transition: top 0.55s var(--spring), left 0.55s var(--spring),
+              width 0.55s var(--spring), height 0.55s var(--spring),
+              transform 0.5s var(--spring), opacity 0.35s var(--smooth);
+}
+.demo-tile.shown { opacity: 1; transform: scale(1); }
+.demo-tile.c0 { background: linear-gradient(135deg, #1d2c3c, #0c141d); }
+.demo-tile.c1 { background: linear-gradient(135deg, #2c2030, #150e17); }
+.demo-tile.c2 { background: linear-gradient(135deg, #233121, #0f150d); }
+.demo-tile.c3 { background: linear-gradient(135deg, #302b1c, #17140c); }
+.demo-tile::after {       /* live status dot */
+  content: ""; position: absolute; left: 10px; bottom: 10px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 8px rgba(52,199,89,0.6); opacity: 0; transition: opacity 0.3s 0.2s;
+}
+.demo-tile.shown::after { opacity: 1; animation: pulse 2.6s var(--smooth) infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* selection token bar (the "tab buttons") */
+.demo-tokens {
+  display: flex; gap: var(--s-8); margin-top: var(--s-12);
+  flex-wrap: wrap; justify-content: center;
+}
+.token {
+  font-family: inherit; font-size: 13px; font-weight: 500; white-space: nowrap;
+  padding: 8px 14px; border-radius: var(--r-full); cursor: default;
+  background: var(--w-06); border: 1px solid var(--w-08); color: var(--w-45);
+  transition: transform 0.28s var(--spring), background 0.25s var(--smooth),
+              color 0.25s var(--smooth), border-color 0.25s var(--smooth);
+}
+.token.active {
+  background: var(--w-15); border-color: rgba(255,255,255,0.22); color: var(--w-1);
+}
+.token.tap { animation: tap 0.34s var(--spring); }
+@keyframes tap { 0% { transform: scale(1); } 35% { transform: scale(0.9); } 100% { transform: scale(1); } }
+
+/* ---------- Section eyebrow ---------- */
+.kicker { color: var(--w-35); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: var(--s-12); }
+
+/* ---------- Section heads ---------- */
+.section-head { text-align: center; margin-bottom: var(--s-56); }
+.section-head .kicker { margin-bottom: var(--s-16); }
+.section-head h2 { font-size: clamp(27px, 3.8vw, 38px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.section-head p { color: var(--w-60); margin-top: var(--s-12); font-size: 17px; }
+
+/* ---------- Features ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s-16); }
+.card { padding: var(--s-32); }
+.card .ico {
+  width: 44px; height: 44px; border-radius: var(--r-12);
+  display: grid; place-items: center; margin-bottom: var(--s-16);
+  background: var(--w-15); border: 1px solid rgba(255,255,255,0.2); font-size: 21px;
+}
+.card h3 { font-size: 18px; font-weight: 600; margin-bottom: var(--s-8); }
+.card p { color: var(--w-60); font-size: 15px; line-height: 1.5; }
+
+/* ---------- Platforms strip (wraps cleanly — no forced overflow) ---------- */
+.platforms {
+  display: flex; flex-wrap: wrap; gap: var(--s-12) var(--s-24);
+  justify-content: center; align-items: center;
+  color: var(--w-35); font-size: 15px; line-height: 1.5; text-align: center;
+}
+.platforms .devs { display: flex; flex-wrap: wrap; gap: var(--s-16); justify-content: center; }
+.platforms strong { color: var(--w-60); font-weight: 500; }
+
+/* ---------- Flow diagram (cameras -> go2rtc -> tiles) ---------- */
+.flow { max-width: 900px; margin: var(--s-40) auto 0; }
+.flow svg { width: 100%; height: auto; display: block; overflow: visible; }
+.flow-label text { fill: var(--w-60); font-family: var(--font); font-size: 16px; font-weight: 600; }
+.flow-node { fill: var(--w-1); font-family: var(--font); font-size: 18px; font-weight: 700; }
+.flow-sub { fill: var(--w-35); font-family: var(--font); font-size: 12px; font-weight: 500; }
+.flow-caption { text-align: center; color: var(--w-45); max-width: 54ch; margin: var(--s-32) auto 0; font-size: 16px; line-height: 1.55; }
+
+/* ---------- Privacy highlight ---------- */
+.highlight { text-align: center; padding: clamp(40px, 7vw, 72px); }
+.highlight h2 { font-size: clamp(25px, 3.4vw, 35px); letter-spacing: -0.02em; line-height: 1.12; max-width: 20ch; margin: 0 auto var(--s-16); }
+.highlight p { color: var(--w-60); max-width: 46ch; margin: 0 auto; font-size: 17px; line-height: 1.55; }
+.highlight a { color: var(--w-1); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Long-form docs ---------- */
+.doc { max-width: var(--readw); margin: 0 auto; padding: clamp(56px,9vh,88px) var(--s-24) var(--s-120); }
+.doc .eyebrow { color: var(--w-35); font-size: 13px; text-transform: uppercase; letter-spacing: 0.09em; }
+.doc h1 { font-size: clamp(30px, 4.6vw, 42px); font-weight: 700; letter-spacing: -0.02em; margin: var(--s-8) 0 var(--s-12); line-height: 1.1; }
+.doc .updated { color: var(--w-35); font-size: 14px; margin-bottom: var(--s-40); }
+.doc h2 { font-size: 21px; font-weight: 600; margin: var(--s-40) 0 var(--s-12); letter-spacing: -0.01em; }
+.doc p { color: rgba(255,255,255,0.82); margin-bottom: var(--s-16); }
+.doc strong { color: var(--w-1); font-weight: 600; }
+.doc code { background: var(--w-08); padding: 2px 7px; border-radius: 6px; font-size: 0.9em; }
+.doc a { color: var(--w-1); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--w-35); }
+.doc a:hover { text-decoration-color: var(--w-1); }
+.doc ul { color: rgba(255,255,255,0.82); margin: 0 0 var(--s-16) var(--s-24); }
+.doc li { margin-bottom: var(--s-8); }
+.doc .lead { font-size: 19px; color: var(--w-1); line-height: 1.5; }
+.doc .callout { padding: var(--s-24); margin: var(--s-24) 0; border-radius: var(--r-16); }
+
+/* FAQ */
+.faq { margin-top: var(--s-16); }
+.faq details { border-bottom: 1px solid var(--w-08); padding: var(--s-16) 0; }
+.faq summary {
+  cursor: pointer; font-weight: 600; font-size: 16px; list-style: none;
+  display: flex; justify-content: space-between; align-items: center; gap: var(--s-16);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--w-35); font-size: 22px; line-height: 1; transition: transform 0.25s var(--spring); }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq details p { margin-top: var(--s-12); margin-bottom: 0; color: var(--w-60); }
+
+/* ---------- Footer ---------- */
+.footer { border-top: 1px solid var(--w-08); padding: var(--s-40) 0; }
+.footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--s-16); align-items: center; }
+.footer-links { display: flex; gap: var(--s-24); flex-wrap: wrap; }
+.footer-links a { color: var(--w-60); font-size: 14px; transition: color 0.2s; }
+.footer-links a:hover { color: var(--w-1); }
+.footer .copy { color: var(--w-35); font-size: 14px; }
+
+/* ---------- Cursor spotlight: a soft glow follows the mouse across the page ---------- */
+.cursor-glow {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(480px circle at var(--mx, 50%) var(--my, -300px),
+              rgba(255,255,255,0.06), transparent 64%);
+  transition: background 0.1s linear;
+}
+
+/* ---------- Interactive glow + lift on cards / panels ----------
+   The glow itself is the effect — no hard border snaps in on hover. */
+.card, .highlight, .demo {
+  position: relative;
+  transition: transform 0.4s var(--spring), box-shadow 0.45s var(--smooth);
+}
+.card { overflow: hidden; }
+.card::before, .highlight::before, .demo::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(260px circle at var(--gx, 50%) var(--gy, 50%),
+              rgba(255,255,255,0.11), transparent 60%);
+  opacity: 0; transition: opacity 0.45s var(--smooth); z-index: 0;
+}
+.card > *, .highlight > *, .demo > * { position: relative; z-index: 1; }
+.card:hover, .highlight:hover, .demo:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 64px -32px rgba(0,0,0,0.85);
+}
+.card:hover::before, .highlight:hover::before, .demo:hover::before { opacity: 1; }
+
+/* ---------- Hero demo: real camera feeds ---------- */
+.demo-tile { background: #0b0b0d; }
+.demo-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------- Flow diagram: protruding cameras, TileCam hero ---------- */
+.flow svg { overflow: visible; }
+.flow .chip { transition: filter 0.3s var(--smooth); }
+.flow .cam-img { filter: drop-shadow(0 7px 12px rgba(0,0,0,0.6)); transition: filter 0.3s var(--smooth); }
+.flow .chip:hover .cam-img { filter: drop-shadow(0 0 14px rgba(255,255,255,0.35)) drop-shadow(0 7px 12px rgba(0,0,0,0.6)); }
+.flow .tc-thumb { clip-path: inset(0 round 8px); }
+.flow-node-lg { fill: var(--w-1); font-family: var(--font); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.flow-node-sm { fill: var(--w-60); font-family: var(--font); font-size: 14px; font-weight: 600; }
+.tilecam-hero { filter: drop-shadow(0 0 34px rgba(255,255,255,0.09)); }
+
+/* ---------- Apple Watch frame ---------- */
+/* Plain centering stage — no card chrome, so nothing but the watch reacts. */
+.watch-stage { display: flex; justify-content: center; align-items: center; padding: clamp(28px, 5vw, 56px); margin-top: var(--s-24); }
+.watch {
+  position: relative; width: clamp(186px, 27vw, 246px); aspect-ratio: 0.84;
+  transition: transform 0.45s var(--spring), filter 0.45s var(--smooth);
+}
+.watch:hover { transform: translateY(-6px); filter: drop-shadow(0 26px 44px rgba(0,0,0,0.55)); }
+.watch .band {
+  position: absolute; left: 50%; transform: translateX(-50%); width: 62%; height: 38%;
+  background: linear-gradient(#3a3a3e, #1c1c1f); z-index: 0;
+}
+.watch .band.top { top: -22%; border-radius: 16px 16px 6px 6px; }
+.watch .band.bottom { bottom: -22%; border-radius: 6px 6px 16px 16px; }
+.watch .case {
+  position: absolute; inset: 0; z-index: 1; border-radius: 32% / 26%;
+  background: linear-gradient(150deg, #46464b, #1a1a1d 60%);
+  box-shadow: 0 26px 60px -24px rgba(0,0,0,0.9), inset 0 0 0 1px rgba(255,255,255,0.08);
+  padding: 7%;
+}
+.watch .screen {
+  position: relative; width: 100%; height: 100%; border-radius: 26% / 22%;
+  overflow: hidden; background: #000; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.6);
+}
+.watch .screen img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.watch .crown {
+  position: absolute; right: -3%; top: 38%; width: 5%; height: 16%; z-index: 2;
+  border-radius: 3px; background: linear-gradient(#55555a, #2a2a2d);
+}
+.watch .crown.btn { top: 58%; height: 11%; }
+
+/* ---------- Scroll reveal ---------- */
+.reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.5s var(--smooth), transform 0.5s var(--spring); }
+.reveal.in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .reveal { opacity: 1; transform: none; }
+  .demo-tile { opacity: 1; transform: none; }
+  .demo-tile::after { opacity: 1; }
+  .token.active { background: var(--w-15); color: var(--w-1); }
+}

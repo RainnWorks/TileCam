@@ -1,0 +1,34 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# SPM
+.build/
+.swiftpm/
+
+# OS
+.DS_Store
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+*.ipa
+*.xcarchive
+.env
+*.p8
+
+# internal release-ops notes — kept locally, not published
+/docs/
+
+# AI-agent tooling & design-process notes — kept locally, not published
+/.claude/
+/.agents/
+/.windsurf/
+/skills/
+/skills-lock.json
+/CLAUDE.md
+/.impeccable.md
+
+# App Store reviewer contact + demo creds — local only, never public
+fastlane/metadata/review_information/

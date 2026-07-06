@@ -1,0 +1,99 @@
+require "tmpdir"
+require "shellwords"
+
+default_platform(:ios)
+
+APP_IDS = ["works.rainn.tilecam", "works.rainn.tilecam.watchkitapp"].freeze
+
+# App Store Connect API key.
+#  - CI (GitHub Actions): set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_CONTENT
+#    (the .p8, base64-encoded → ASC_KEY_CONTENT_BASE64=true) as secrets.
+#  - Local: falls back to pulling the .p8 out of 1Password (thenairn / Private)
+#    so nothing secret is ever committed. Needs the `op` CLI signed into that
+#    account. Key ID / Issuer ID are identifiers, not secrets.
+def asc_api_key
+  if ENV["ASC_KEY_ID"] && ENV["ASC_ISSUER_ID"] && (ENV["ASC_KEY_CONTENT"] || ENV["ASC_KEY_FILEPATH"])
+    app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      key_filepath: ENV["ASC_KEY_FILEPATH"],
+      is_key_content_base64: ENV["ASC_KEY_CONTENT_BASE64"] == "true",
+      in_house: false
+    )
+  else
+    key_id = ENV["ASC_KEY_ID"] || "5WHJ3464D2"
+    issuer = ENV["ASC_ISSUER_ID"] || "c73bbb08-c295-4f05-8941-061c35640941"
+    # Prefer a key already in the standard location (no 1Password prompt);
+    # otherwise pull it from 1Password once.
+    standard = File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{key_id}.p8")
+    key_path = File.exist?(standard) ? standard : File.join(Dir.tmpdir, "asc_tilecam_#{key_id}.p8")
+    unless File.exist?(key_path)
+      UI.message("Fetching App Store Connect API key from 1Password…")
+      sh("env -u OP_SERVICE_ACCOUNT_TOKEN op --account my.1password.com document get " \
+         "'ASC API Key - TileCam Build Upload (RainnWorks)' --vault Private " \
+         "--out-file #{key_path.shellescape}")
+    end
+    app_store_connect_api_key(key_id: key_id, issuer_id: issuer, key_filepath: key_path, in_house: false)
+  end
+end
+
+platform :ios do
+  desc "Regenerate the Xcode project from project.yml (xcodegen is the source of truth)"
+  lane :gen do
+    sh("cd .. && xcodegen generate")
+  end
+
+  desc "Sync App Store signing certs + profiles via match (CI). Needs MATCH_GIT_URL + MATCH_PASSWORD."
+  lane :signing do
+    match(type: "appstore", app_identifier: APP_IDS, readonly: is_ci, api_key: asc_api_key)
+  end
+
+  desc "Build the App Store .ipa"
+  lane :build do
+    gen
+    setup_ci if is_ci
+    signing if is_ci # CI uses match; locally we rely on Xcode automatic signing
+    build_app(
+      project: "TileCam.xcodeproj",
+      scheme: "TileCam",
+      export_method: "app-store",
+      output_directory: "build/fastlane",
+      output_name: "TileCam.ipa",
+      xcargs: is_ci ? nil : "-allowProvisioningUpdates"
+    )
+  end
+
+  desc "Upload metadata + screenshots only (no binary, no submit)"
+  lane :metadata do
+    deliver(
+      api_key: asc_api_key,
+      skip_binary_upload: true,
+      skip_screenshots: false,
+      overwrite_screenshots: true,
+      force: true,                       # skip the interactive HTML preview
+      run_precheck_before_submit: false, # precheck needs extra scopes; skip
+      submit_for_review: false
+    )
+  end
+
+  desc "Build + upload binary + metadata + screenshots to App Store Connect (does NOT submit)"
+  lane :release do
+    build
+    deliver(
+      api_key: asc_api_key,
+      ipa: "build/fastlane/TileCam.ipa",
+      skip_screenshots: false,
+      overwrite_screenshots: true,
+      force: true,
+      run_precheck_before_submit: false,
+      submit_for_review: false
+    )
+  end
+
+  desc "Build + upload to TestFlight"
+  lane :beta do
+    build
+    upload_to_testflight(api_key: asc_api_key, skip_waiting_for_build_processing: true)
+  end
+end
