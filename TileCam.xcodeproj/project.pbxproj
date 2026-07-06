@@ -365,15 +365,15 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					98A92E91B980981B9EAB55A0 = {
-						DevelopmentTeam = YK42U4LDMG;
+						DevelopmentTeam = 53W966FBFP;
 						ProvisioningStyle = Automatic;
 					};
 					DED5BE0EC1A27DD0963B7B36 = {
-						DevelopmentTeam = YK42U4LDMG;
+						DevelopmentTeam = 53W966FBFP;
 						ProvisioningStyle = Automatic;
 					};
 					EB7D63147EC9F7A495CD2459 = {
-						DevelopmentTeam = YK42U4LDMG;
+						DevelopmentTeam = 53W966FBFP;
 						ProvisioningStyle = Automatic;
 						TestTargetID = DED5BE0EC1A27DD0963B7B36;
 					};
@@ -519,7 +519,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DEVELOPMENT_TEAM = 53W966FBFP;
 				INFOPLIST_FILE = GlassView/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -540,7 +540,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DEVELOPMENT_TEAM = 53W966FBFP;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -564,7 +564,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DEVELOPMENT_TEAM = 53W966FBFP;
 				INFOPLIST_FILE = GlassView/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -586,7 +586,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DEVELOPMENT_TEAM = 53W966FBFP;
 				INFOPLIST_FILE = TileCamWatch/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = works.rainn.tilecam.watchkitapp;
@@ -660,7 +660,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DEVELOPMENT_TEAM = 53W966FBFP;
 				INFOPLIST_FILE = TileCamWatch/Info.plist;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = works.rainn.tilecam.watchkitapp;
@@ -676,7 +676,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = YK42U4LDMG;
+				DEVELOPMENT_TEAM = 53W966FBFP;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
