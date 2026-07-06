@@ -19,8 +19,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+      # Pick the Xcode to build with. Two constraints:
+      #  1. The app uses iOS 26 "Liquid Glass" APIs (glassEffect, the `.circle`
+      #     shape shorthand) behind `#available(iOS 26, *)`, so it needs the
+      #     iOS 26 SDK (Xcode 26+) to COMPILE — older Xcodes fail with
+      #     "cannot infer contextual base in reference to member 'circle'".
+      #  2. On the macos-15 image some Xcodes ship WITHOUT the iOS device
+      #     platform, so `xcodebuild -destination generic/platform=iOS` (what
+      #     gym archives with) fails with "iOS … is not installed".
+      # So: scan every installed Xcode, newest first, and select the newest one
+      # whose `-showsdks` actually lists an iphoneos SDK.
+      - name: Select newest Xcode with iOS SDK
+        run: |
+          set -euo pipefail
+          echo "Installed Xcodes:"; ls -d /Applications/Xcode*.app 2>/dev/null || true
+          selected=""
+          for xc in $(ls -d /Applications/Xcode*.app 2>/dev/null | sort -Vr); do
+            dev="$xc/Contents/Developer"
+            if DEVELOPER_DIR="$dev" xcodebuild -showsdks 2>/dev/null | grep -qi "iphoneos"; then
+              selected="$xc"; break
+            fi
+          done
+          if [ -z "$selected" ]; then
+            echo "::error::No installed Xcode has the iOS device SDK"; exit 1
+          fi
+          echo "Selecting $selected"
+          sudo xcode-select -s "$selected/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos
 
       - name: Set up Ruby + bundler cache
         uses: ruby/setup-ruby@v1
