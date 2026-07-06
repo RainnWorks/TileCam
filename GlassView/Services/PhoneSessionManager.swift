@@ -80,6 +80,13 @@ final class PhoneSessionManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var go2rtcService: Go2RTCService?
 
+    #if DEBUG
+    /// One-shot guard for the `-uiTestPushWatchCamera` capture hook (see
+    /// `debugPushWatchCameraIfRequested`). Lives on the class — Swift forbids
+    /// stored properties in the WCSessionDelegate extension where it's used.
+    fileprivate var didDebugPushWatchCamera = false
+    #endif
+
     private var watchedStreamName: String?
     private var currentMode: WatchStreamMode = .videoAndAudio
     private var snapshotTask: Task<Void, Never>?
@@ -744,7 +751,6 @@ extension PhoneSessionManager: WCSessionDelegate {
     /// Test-only: when launched with `-uiTestPushWatchCamera <stream>`, push that
     /// camera to the Watch once it's reachable so a capture lands straight on the
     /// live snapshot view. Retries briefly while the Watch finishes connecting.
-    private var didDebugPushWatchCamera = false
     func debugPushWatchCameraIfRequested() {
         guard !didDebugPushWatchCamera,
               let cam = UserDefaults.standard.string(forKey: "uiTestPushWatchCamera"),
