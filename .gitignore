@@ -10,3 +10,10 @@ build/
 
 # OS
 .DS_Store
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+*.ipa
+*.xcarchive
+.env
+*.p8

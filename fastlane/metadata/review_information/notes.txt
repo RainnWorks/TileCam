@@ -1,0 +1,10 @@
+TileCam is a viewer for your own cameras via a go2rtc server (github.com/AlexxIT/go2rtc); it ships with no cameras of its own.
+
+TO TEST:
+1. Launch the app. On first run it asks for a server URL — enter:  <DEMO_GO2RTC_URL>
+2. The camera list loads automatically; tap the tokens at the bottom to add tiles to the grid. Tiles begin streaming live over WebRTC within a few seconds.
+3. Pinch any tile to zoom; tap a tile for full-screen.
+
+IN-APP PURCHASE: "Watch Unlock" (works.rainn.tilecam.watch.unlock, non-consumable, Family Shareable) unlocks the Apple Watch app only. The iPhone/iPad/Mac apps are fully functional without it.
+
+The demo server above is a temporary go2rtc instance with sample public feeds, provided for review.

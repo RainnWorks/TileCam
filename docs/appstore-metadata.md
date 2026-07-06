@@ -18,7 +18,7 @@ Provider: RainnWorks (team 53W966FBFP)
 > Pull every camera you own into one calm grid on iPhone, iPad, Mac, and Apple Watch. Point your own go2rtc server at any RTSP/ONVIF camera — your video stays on your network.
 
 **Keywords** (100, comma-separated, no spaces):
-`camera,cctv,rtsp,onvif,go2rtc,webrtc,security,nanny,ip camera,viewer,grid,nvr,live,monitor,surveillance`
+`camera,cctv,rtsp,onvif,go2rtc,webrtc,security,nanny,ip camera,viewer,grid,nvr,live,monitor`
 
 **Description** (4000):
 ```

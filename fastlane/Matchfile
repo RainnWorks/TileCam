@@ -1,0 +1,17 @@
+# Shared signing for CI (GitHub Actions). match stores the App Store distribution
+# certificate + provisioning profiles, AES-encrypted, in a SEPARATE PRIVATE repo
+# (this is the "own repo" — never public). Local dev uses Xcode automatic signing
+# and doesn't need this.
+#
+# One-time bootstrap (run locally by an Admin/Account Holder):
+#   1. Create a private repo, e.g. github.com/rainnworks/ios-certificates
+#   2. export MATCH_GIT_URL=git@github.com:rainnworks/ios-certificates.git
+#      export MATCH_PASSWORD=<a strong passphrase — store in 1Password>
+#   3. bundle exec fastlane match appstore   # generates + pushes the cert/profiles
+# Then add MATCH_GIT_URL, MATCH_PASSWORD (+ a repo deploy key / token) as GHA secrets.
+
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")
+app_identifier(["works.rainn.tilecam", "works.rainn.tilecam.watchkitapp"])
+# team_id comes from the Appfile (53W966FBFP). Auth via the ASC API key.
