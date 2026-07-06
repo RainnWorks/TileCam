@@ -19,14 +19,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app
-
-      # The macos-15 image ships Xcode 16.2 without the iOS device platform
-      # pre-installed, so `xcodebuild -destination generic/platform=iOS` (what
-      # gym uses to archive) fails with "iOS 18.2 is not installed". Download it.
-      - name: Install iOS platform
-        run: xcodebuild -downloadPlatform iOS
+      # Pin an Xcode that actually has the iOS device SDK installed. On the
+      # macos-15 image, Xcode_16.2 ships WITHOUT the iOS platform, so gym's
+      # `xcodebuild -destination generic/platform=iOS` archive fails with
+      # "iOS 18.2 is not installed". `-downloadPlatform iOS` is flaky on the
+      # runner (exit 70), so instead we scan the installed Xcodes and select
+      # the newest one whose `-showsdks` lists an iphoneos SDK.
+      - name: Select Xcode with iOS SDK
+        run: |
+          set -euo pipefail
+          selected=""
+          for xc in $(ls -d /Applications/Xcode_16*.app /Applications/Xcode.app 2>/dev/null | sort -Vr); do
+            dev="$xc/Contents/Developer"
+            if DEVELOPER_DIR="$dev" xcodebuild -showsdks 2>/dev/null | grep -qi "iphoneos"; then
+              selected="$xc"; break
+            fi
+          done
+          if [ -z "$selected" ]; then
+            echo "::error::No installed Xcode has the iOS device SDK"; exit 1
+          fi
+          echo "Selecting $selected"
+          sudo xcode-select -s "$selected/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos
 
       - name: Set up Ruby + bundler cache
         uses: ruby/setup-ruby@v1
