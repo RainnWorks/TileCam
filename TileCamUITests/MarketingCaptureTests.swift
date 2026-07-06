@@ -27,7 +27,7 @@ final class MarketingCaptureTests: TileCamUITestCase {
     func testCaptureDemo() {
         let app = XCUIApplication()
         app.launchArguments += [
-            "-uiTestServerURL", "http://192.168.99.86:1984",
+            "-uiTestServerURL", TileCamUITestCase.liveServerURL,
             // Launch with NO streams selected so the grid starts empty and we
             // load tiles by tapping the bottom tokens on camera.
             "-uiTestStreams", "",

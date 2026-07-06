@@ -5,8 +5,11 @@ import XCTest
 /// `NSArgumentDomain`, which `AppState.applyUITestLaunchArguments()` reads) so
 /// each test boots straight into a deterministic server + stream selection.
 class TileCamUITestCase: XCTestCase {
-    /// The live go2rtc server the device-style tests run against.
-    static let liveServerURL = "https://cameras.thenairn.com"
+    /// The live go2rtc server the device-style tests run against. Point this at
+    /// your own go2rtc instance via the `TILECAM_TEST_SERVER` env var (the
+    /// example host below is just a placeholder and won't resolve).
+    static let liveServerURL =
+        ProcessInfo.processInfo.environment["TILECAM_TEST_SERVER"] ?? "https://go2rtc.example.com"
 
     /// Generous timeouts — these are real network flows over WebRTC, not local
     /// fixtures, so first-frame latency varies with the upstream cameras.

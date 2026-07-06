@@ -9,15 +9,17 @@
 #
 # Usage:
 #   tools/check-stream-audio.sh <stream_name> [base_url]
-#   tools/check-stream-audio.sh tali_room
-#   tools/check-stream-audio.sh mia_room https://cameras.thenairn.com
+#   tools/check-stream-audio.sh front_door
+#   tools/check-stream-audio.sh kitchen https://go2rtc.example.com
+#
+# Point it at your own go2rtc server via the second arg or $GO2RTC_BASE.
 #
 # Exit codes: 0 = usable audio track flowing, 1 = no/empty audio, 2 = error.
 
 set -u
 
 STREAM="${1:-}"
-BASE="${2:-https://cameras.thenairn.com}"
+BASE="${2:-${GO2RTC_BASE:-https://go2rtc.example.com}}"
 
 if [[ -z "$STREAM" ]]; then
   echo "usage: $0 <stream_name> [base_url]" >&2
