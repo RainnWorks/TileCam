@@ -24,7 +24,16 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
 
     private var _isInitialized = false
     private var _isPlayoutInitialized = false
-    private var _isPlaying = false
+    /// Backed by a dedicated lock (NOT `engineQueue`) so WebRTC can read
+    /// `isPlaying` while setting up a peer connection without ever blocking on a
+    /// stalled engine rebuild. A dead/rebuilding audio engine must never be able
+    /// to wedge video negotiation — that coupling is what left the first camera
+    /// stuck "connecting" forever after a sleep until the app was killed.
+    private let _playingLock = OSAllocatedUnfairLock(initialState: false)
+    private var _isPlaying: Bool {
+        get { _playingLock.withLock { $0 } }
+        set { _playingLock.withLock { $0 = newValue } }
+    }
 
     /// Serializes all engine build/teardown so observer callbacks and the
     /// RTCAudioDevice lifecycle calls don't race.
@@ -57,10 +66,11 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
 
     var isInitialized: Bool { _isInitialized }
     var isPlayoutInitialized: Bool { _isPlayoutInitialized }
-    // Read from WebRTC's ADM thread; serialize on engineQueue so WebRTC can't
-    // see a stale `true` while the engine is stopped mid-rebuild. WebRTC never
-    // reads this from a thread already on engineQueue, so sync is deadlock-free.
-    var isPlaying: Bool { engineQueue.sync { _isPlaying } }
+    // Read straight from the dedicated playing lock — never touches engineQueue,
+    // so a mid-rebuild or wedged engine can't block WebRTC's peer-connection
+    // setup here. `_isPlaying` is written false before teardown and true only
+    // after a successful start, so WebRTC never sees a stale `true`.
+    var isPlaying: Bool { _isPlaying }
     var isRecordingInitialized: Bool { true }
     var isRecording: Bool { false }
 
@@ -210,11 +220,6 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
         engineQueue.async { [weak self] in
             guard let self else { return }
             guard self._isPlayoutInitialized else { return }
-            // If the engine is already running, nothing to do.
-            if let engine = self.audioEngine, engine.isRunning {
-                self._isPlaying = true
-                return
-            }
             #if os(iOS)
             do {
                 try AVAudioSession.sharedInstance().setActive(true)
@@ -222,6 +227,14 @@ final class PlaybackOnlyAudioDevice: NSObject, RTCAudioDevice {
                 log.error("session reactivate failed: \(error.localizedDescription, privacy: .public)")
             }
             #endif
+            // Recovery must NOT trust engine.isRunning. When iOS tears the audio
+            // unit down while we're suspended it often delivers no interruption/
+            // reset notification, and AVAudioEngine can then keep reporting
+            // isRunning == true while producing nothing — a zombie that only an
+            // app kill cleared. Force a clean teardown + fresh rebuild so playout
+            // is genuinely live again (buildAndStart rebuilds once audioEngine is
+            // nil'd by stopEngineLocked).
+            self.stopEngineLocked()
             self.buildAndStartEngineLocked()
         }
     }
