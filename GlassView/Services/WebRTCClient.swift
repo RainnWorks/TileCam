@@ -131,10 +131,39 @@ final class WebRTCClient: NSObject, ObservableObject {
             try? await Task.sleep(for: .seconds(Self.firstFrameTimeout))
             guard let self, !Task.isCancelled else { return }
             guard !self.videoReady, self.videoExpected else { return }
+            // The render view's first-frame signal (didChangeVideoSize) can be
+            // missed on a same-resolution reconnect — the reused RTCMTLVideoView
+            // never re-reports its size — which would loop this watchdog forever
+            // on a stream that is actually playing. Before retrying, confirm with
+            // the peer connection's own stats that no frames are decoding.
+            if await self.isDecodingVideo() {
+                guard !Task.isCancelled else { return }
+                self.markVideoReady()
+                return
+            }
             log.warning("[\(self.streamName)] No video frame after \(Self.firstFrameTimeout)s — retrying")
             self.error = self.error ?? "No video received"
             self.scheduleRetry()
         }
+    }
+
+    /// Whether the current peer connection is actually decoding video frames,
+    /// read straight from the inbound-rtp stats. Ground truth for "is it playing"
+    /// that doesn't depend on the render view's one-shot size callback.
+    private func isDecodingVideo() async -> Bool {
+        guard let pc = peerConnection else { return false }
+        let report: RTCStatisticsReport = await withCheckedContinuation { cont in
+            pc.statistics { cont.resume(returning: $0) }
+        }
+        for stats in report.statistics.values {
+            guard stats.type == "inbound-rtp" else { continue }
+            let kind = (stats.values["kind"] as? String) ?? (stats.values["mediaType"] as? String)
+            guard kind == "video" else { continue }
+            if let decoded = stats.values["framesDecoded"] as? NSNumber, decoded.intValue > 0 {
+                return true
+            }
+        }
+        return false
     }
 
     private func attemptConnection() async {
