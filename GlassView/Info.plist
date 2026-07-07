@@ -29,6 +29,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>TileCam needs camera access for WebRTC video streaming.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>TileCam connects to camera servers on your local network to show live video.</string>
 	<key>NSMicrophoneUsageDescription</key>
