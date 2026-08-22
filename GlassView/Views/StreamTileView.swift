@@ -234,9 +234,9 @@ struct StreamTileView: View {
             }
             .liquidGlassCircle()
             .contentShape(Rectangle())
-            .padding(.bottom, max(8, insets.bottom + 4))
+            .padding(.top, max(8, insets.top + 4))
             .padding(.trailing, max(8, insets.right + 4))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .accessibilityLabel("Motion visualization: \(motionMode.label)")
             .transition(.opacity)
         }
@@ -724,6 +724,10 @@ struct WebRTCVideoView: UIViewRepresentable {
             context.coordinator.currentTrack?.remove(uiView)
             videoTrack.add(uiView)
             context.coordinator.currentTrack = videoTrack
+            // A reconnect swaps in a fresh track; clear the one-shot latch so its
+            // first frame re-reports readiness (otherwise the tile stays "loading"
+            // and the frame watchdog keeps restarting a stream that's playing).
+            context.coordinator.didReportFrame = false
         }
     }
 
@@ -735,7 +739,7 @@ struct WebRTCVideoView: UIViewRepresentable {
     final class Coordinator: NSObject, RTCVideoViewDelegate {
         var currentTrack: RTCVideoTrack?
         var onFirstFrame: () -> Void
-        private var didReportFrame = false
+        var didReportFrame = false
 
         init(onFirstFrame: @escaping () -> Void) {
             self.onFirstFrame = onFirstFrame
