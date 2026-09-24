@@ -91,8 +91,8 @@ unless you route it off yourself.
 ## Release automation
 
 CI builds and ships to TestFlight via [fastlane](fastlane/) on a `v*` tag — see
-[`fastlane/SETUP.md`](fastlane/SETUP.md). App Store signing for CI uses `match` with a
-**separate private** certificates repo (signing material is never committed here).
+[`fastlane/SETUP.md`](fastlane/SETUP.md). Signing goes through the private
+RainnWorks/apple-signing repo (signing material is never committed here).
 
 ## License
 

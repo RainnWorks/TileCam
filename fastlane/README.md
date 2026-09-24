@@ -29,7 +29,7 @@ Regenerate the Xcode project from project.yml (xcodegen is the source of truth)
 [bundle exec] fastlane ios signing
 ```
 
-Sync App Store signing certs + profiles via match (CI). Needs MATCH_GIT_URL + MATCH_PASSWORD.
+Install the App Store certificate and profiles on this Mac with rw-apple (CI runs the sync step in the workflow)
 
 ### ios build
 
