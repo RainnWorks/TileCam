@@ -1,102 +1,133 @@
-# TileCam
+<p align="center">
+  <img src="assets/icon-1024.png" width="128" alt="TileCam icon">
+</p>
 
-**Every camera you own, tiled into one calm grid — on iPhone, iPad, Mac, and Apple Watch.**
+<h1 align="center">TileCam</h1>
 
-TileCam is a native camera-wall app for Apple platforms. Point it at your own
-[go2rtc](https://github.com/AlexxIT/go2rtc) server and it pulls all your cameras —
-Tapo, Reolink, UniFi, Amcrest, Hikvision, or anything that speaks ONVIF / RTSP — into
-a single adaptive grid that looks and feels like an Apple app, not a security panel.
-Your video streams directly between your device and your own server over WebRTC; nothing
-is routed through anyone else.
+<p align="center">Watch every camera from your go2rtc server in one live grid, on iPhone, iPad, Mac and Apple Watch.</p>
 
-- **Platforms:** iOS 17+ (iPhone, iPad, Mac Catalyst), watchOS 10+. Dark mode only.
-- **Stack:** SwiftUI (no UIKit), WebRTC ([stasel/WebRTC](https://github.com/stasel/WebRTC)) via SPM.
-- **Backend:** your own go2rtc instance — free and open source.
+<p align="center"><strong>Coming soon to the App Store.</strong> Until then, you can <a href="#build-from-source">build it from source</a>.</p>
 
-## Features
+![Tapo, Reolink, UniFi and ONVIF / RTSP cameras shown together in one TileCam grid on an iPad](assets/hero.png)
 
-- **One grid, not five apps** — an adaptive layout that reflows to fit however many cameras you point it at.
-- **Zoom & pan** — pinch into any live feed to read a label or check a face; it remembers where you left each tile.
-- **Motion visualization** — a breathing magnifier, directional motion flow, and an intensity heatmap, right on the feed.
-- **Picture-in-Picture** — float a camera in the corner while you do everything else.
-- **Live audio** — two-way audio on cameras that support it, with per-stream mute and level metering.
-- **On your wrist** — a watchOS companion relays feeds from your iPhone over Bluetooth for a quick live look.
+## Getting started
 
-## Building it yourself
+1. **Set up go2rtc.** TileCam shows the cameras on your own
+   [go2rtc](https://github.com/AlexxIT/go2rtc) server. Add your cameras to go2rtc first.
+   Anything go2rtc can read works: Tapo, Reolink, UniFi, Amcrest, Hikvision, or any ONVIF
+   or RTSP camera.
+2. **Install TileCam.** It is coming soon to the App Store for iPhone, iPad and Mac. Until
+   then, [build it from source](#build-from-source).
+3. **Open TileCam and enter your server's address**, for example
+   `http://192.168.1.100:1984`. Tap **Test**. TileCam shows how many streams it found.
+   Then tap **Connect**.
+4. **Allow local network access** when iOS asks. TileCam needs it to reach your server.
+   If you declined, turn it on in the Settings app under TileCam. Until then TileCam shows
+   **Cannot reach server** with a **Retry** button.
+5. **Tap a camera name at the bottom of the screen.** Its live video appears as a tile.
+   Tap more names to add more tiles.
 
-TileCam is **free** on the App Store for iPhone, iPad, and Mac. The Apple Watch companion
-is unlocked by a single one-time in-app purchase — that's how the project keeps the lights on.
+TileCam needs iOS 17, macOS 14 or watchOS 10 or later. The App Store installs updates.
 
-But it's all here in the open. If you'd rather build TileCam from source and run it on your
-own devices, go right ahead — that's exactly why this is public. You'll need:
+## Use
 
-- Your own **Apple Developer account** to sign device builds.
-- Your own **go2rtc server** with your cameras configured.
+Tap anywhere to show or hide the controls.
 
-The Watch unlock is just a StoreKit product (see [`TileCam.storekit`](TileCam.storekit)) —
-building from source, it's yours to flip on. Buying it on the App Store is a lovely way to
-support the work, but if you're compiling it yourself, don't sweat the payment side.
+| To | Do this |
+|---|---|
+| Zoom into a camera | Pinch the tile, then drag. TileCam remembers where you left each camera. |
+| Go back to the full view | Tap the recenter button on the tile. |
+| Mute or unmute a camera | Press and hold its tile. |
+| Mute everything | Tap the speaker button at the top. |
+| See motion | Tap the motion button on a tile: **Breathing** makes small movements larger, **Motion Flow** shows which way things move, **Heat Map** shows where. |
+| Keep watching in another app | Leave TileCam. The camera keeps playing in Picture in Picture. Close that window to stop. |
+| Send a camera to Apple Watch | Tap the Watch button on its tile. |
 
-## Build
+**Settings** has **Keep Screen Awake**, **Dim Video** for night viewing, and
+**Background Audio**.
 
-The Xcode project is **generated** — [`project.yml`](project.yml) is the source of truth,
-`TileCam.xcodeproj` is produced by [xcodegen](https://github.com/yonom/xcodegen). Don't
-hand-edit the `.pbxproj`.
+The Apple Watch app is a one-time purchase, with Family Sharing. Buy or restore it from
+**Watch settings** in the iPhone app. Its options:
+
+| Setting | Options |
+|---|---|
+| Default Mode | Video + Audio, Video Only, Audio Only |
+| When you lower your wrist | Pause, Listen, Stay On |
+| Auto-Timeout | Off, 15 min, 30 min, 1 hour, 2 hours |
+
+## How it works
+
+![A camera's video goes through go2rtc to TileCam over WebRTC, and from the iPhone to Apple Watch as snapshots and audio](assets/how-it-works.png)
+
+TileCam never talks to your cameras. It asks go2rtc for its list of streams, and go2rtc
+turns each camera into a WebRTC stream that TileCam plays in a tile. Video goes straight
+from your server to your device. Nothing passes through RainnWorks, and the app collects
+no data. The Apple Watch cannot play WebRTC, so the iPhone fetches snapshots and audio
+from go2rtc and sends them to the Watch.
+
+## Limits
+
+- **You need a go2rtc server.** TileCam cannot connect to a camera or a camera maker's
+  cloud by itself.
+- **Watching away from home needs your own route to the server,** such as a VPN.
+  TileCam does not provide one.
+- **No recording and no alerts.** TileCam shows live video only.
+- **Audio is listen only.** You cannot talk through a camera.
+- **Apple Watch needs its iPhone nearby,** because the iPhone sends it the video.
+- **Dark mode only.**
+
+## Build from source
 
 ```sh
-brew install xcodegen        # once
-xcodegen generate            # regenerate the project after changing project.yml or adding files
+brew install xcodegen
+xcodegen generate
+open TileCam.xcodeproj
 ```
 
-Open `TileCam.xcodeproj` and build the `TileCam` scheme to a device or Mac. A signing-free
-compile check (no device or Apple ID needed):
+Build the `TileCam` scheme. Things that surprise:
+
+- **The Xcode project is generated** from [`project.yml`](project.yml). Do not edit the
+  `.pbxproj`. Add new files to the right folder under `GlassView/` or `TileCamWatch/`,
+  then run `xcodegen generate` again.
+- **You need Xcode 26.** The app uses iOS 26 Liquid Glass behind an availability check,
+  so it needs the iOS 26 SDK to compile, even though it runs on iOS 17.
+- **Change the bundle IDs and team to your own** before you run on a device:
+  `works.rainn.tilecam`, `works.rainn.tilecam.watchkitapp` and `DEVELOPMENT_TEAM` in
+  `project.yml`.
+- **The Watch unlock is free in your own builds.** Debug runs use
+  [`TileCam.storekit`](TileCam.storekit), so the purchase costs nothing. Once TileCam is on
+  the App Store, buying the unlock there supports the project.
+
+To check that it compiles without signing:
 
 ```sh
 xcodebuild -project TileCam.xcodeproj -scheme TileCam \
   -sdk iphoneos -configuration Debug build CODE_SIGNING_ALLOWED=NO
 ```
 
-Bundle IDs are `works.rainn.tilecam` and `works.rainn.tilecam.watchkitapp` — change these
-to your own in `project.yml` for a personal build.
+## Release
 
-## Architecture
+Set `MARKETING_VERSION` in `project.yml` for both app targets, commit, then push a
+matching tag:
 
-```
-GlassView/
-  App/        — app entry (TileCamApp.swift)
-  Models/     — data models (Stream.swift)
-  Services/   — session, WebRTC, go2rtc, audio, motion analytics
-                (PhoneSessionManager, WebRTCClient, Go2RTCService, PiPManager,
-                 EulerianMagnifier, MotionAnalyzer, MotionFlowAnalyzer, …)
-  Views/      — SwiftUI UI (ContentView, StreamTileView, Components/…)
-TileCamWatch/ — the watchOS app (WatchSessionManager handles iPhone↔Watch sync)
+```sh
+git tag v1.0 && git push origin v1.0
 ```
 
-New source files are picked up by directory — drop them in the right folder and run
-`xcodegen generate`.
+GitHub Actions then:
 
-## Design
+1. signs with the RainnWorks App Store certificate, through
+   [`RainnWorks/apple-signing`](https://github.com/RainnWorks/apple-signing),
+2. builds the app with the Watch app inside it, using the run number as the build
+   number,
+3. uploads it to TestFlight.
 
-The UI is dark-mode-only glassomorphism: opacity as hierarchy, spring-loaded interactions,
-44pt touch targets, and a consistent set of spacing / radius / duration tokens. It aims to
-feel like a native Apple app, not a security panel.
-
-## Backend setup
-
-You bring your own [go2rtc](https://github.com/AlexxIT/go2rtc) server. Add your cameras to its
-`go2rtc.yaml` (RTSP / ONVIF / etc.), point the app at the server's URL, and the camera list
-loads automatically. Video flows device ↔ server over WebRTC — it never leaves your network
-unless you route it off yourself.
-
-## Release automation
-
-CI builds and ships to TestFlight via [fastlane](fastlane/) on a `v*` tag — see
-[`fastlane/SETUP.md`](fastlane/SETUP.md). Signing goes through the private
-RainnWorks/apple-signing repo (signing material is never committed here).
+Submitting for review is done by hand in App Store Connect. Metadata and screenshots
+live in [`fastlane/`](fastlane/). See [`fastlane/SETUP.md`](fastlane/SETUP.md) for the
+lanes and secrets.
 
 ## License
 
-**Source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE). Build it,
-modify it, run it, and share it for any **noncommercial** purpose — personal use, hobby
-projects, study, research. Commercial use (reselling it, or shipping it for a fee) isn't
-granted by the license; that's what the App Store build is for. Not affiliated with go2rtc.
+Source available under the [PolyForm Noncommercial License 1.0.0](LICENSE). You can
+build, change, run and share TileCam for any noncommercial purpose. Commercial use is
+not granted. TileCam is not affiliated with go2rtc.

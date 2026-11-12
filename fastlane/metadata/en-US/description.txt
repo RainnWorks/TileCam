@@ -13,7 +13,7 @@ ONE GRID, NOT FIVE APPS
 • Zoom & pan — pinch into any live feed to read a label, check a face, or watch the cot. It remembers where you left each one.
 • Motion visualization — spot subtle movement at a glance with a breathing magnifier, directional motion flow, and an intensity heatmap, right on the feed.
 • Picture-in-Picture — float a camera in the corner and keep half an eye on it while you do everything else.
-• Live audio — two-way audio on cameras that support it, with per-stream mute and clean level metering.
+• Live audio — listen to any camera that has a microphone, with per-stream mute and clean level metering.
 • Everywhere you are — iPhone, iPad, and Mac, the same calm grid, in sync.
 
 ON YOUR WRIST
